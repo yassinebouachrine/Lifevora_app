@@ -1,10 +1,12 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/activity_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../widgets/activity_card.dart';
 import '../../widgets/stat_card.dart';
 import '../history/history_screen.dart';
@@ -15,46 +17,48 @@ class HomeContent extends StatelessWidget {
   const HomeContent({super.key});
 
   String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Bonjour ☀️';
-    if (hour < 18) return 'Bon après-midi 👋';
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Bonjour ☀️';
+    if (h < 18) return 'Bon après-midi 👋';
     return 'Bonsoir 🌙';
   }
 
   @override
   Widget build(BuildContext context) {
-    final userProvider = context.watch<UserProvider>();
-    final activityProvider = context.watch<ActivityProvider>();
-    final user = userProvider.user;
+    final user = context.watch<UserProvider>().user;
+    final ap = context.watch<ActivityProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.darkBackground : AppColors.background;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
           _buildHeader(
             context,
             user?.name ?? '',
-            activityProvider,
+            ap,
             user?.goalMinutesPerWeek ?? 150,
+            isDark,
           ),
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                _buildStatCards(activityProvider)
+                _buildStatCards(context, ap, isDark)
                     .animate()
                     .fadeIn(delay: 200.ms)
                     .slideY(begin: 0.3, end: 0),
                 const SizedBox(height: 24),
-                _buildQuickActions(context)
+                _buildQuickActions(context, isDark)
                     .animate()
                     .fadeIn(delay: 300.ms),
                 const SizedBox(height: 24),
-                _buildChartSection(activityProvider)
+                _buildChartSection(context, ap, isDark)
                     .animate()
                     .fadeIn(delay: 400.ms),
                 const SizedBox(height: 24),
-                _buildLastActivity(context, activityProvider)
+                _buildLastActivity(context, ap, isDark)
                     .animate()
                     .fadeIn(delay: 500.ms),
                 const SizedBox(height: 100),
@@ -71,15 +75,19 @@ class HomeContent extends StatelessWidget {
     String name,
     ActivityProvider ap,
     int goal,
+    bool isDark,
   ) {
     final percent =
         goal > 0 ? (ap.totalWeekMinutes / goal).clamp(0.0, 1.0) : 0.0;
+    final gradient = isDark
+        ? AppColors.darkHeaderGradient
+        : AppColors.headerGradient;
 
     return SliverToBoxAdapter(
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-          borderRadius: BorderRadius.only(
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: const BorderRadius.only(
             bottomLeft: Radius.circular(32),
             bottomRight: Radius.circular(32),
           ),
@@ -92,62 +100,104 @@ class HomeContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _getGreeting(),
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
+                    // Logo + nom
+                    Expanded(
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              width: 38,
+                              height: 38,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: Colors.white
+                                      .withValues(alpha: 0.2),
+                                  borderRadius:
+                                      BorderRadius.circular(12),
+                                ),
+                                child: const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedDumbbell01,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                        Text(
-                          name.isEmpty ? 'Lifevora' : name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _getGreeting(),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                name.isEmpty ? 'Lifevora' : name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    // Boutons header
                     Row(
                       children: [
-                        _iconBtn(Icons.nightlight_round, () {}),
+                        _iconBtn(
+                          HugeIcons.strokeRoundedMoon01,
+                          () => context
+                              .read<ThemeProvider>()
+                              .toggleTheme(),
+                        ),
                         const SizedBox(width: 8),
-                        _iconBtn(Icons.settings_rounded, () {}),
+                        _iconBtn(
+                          HugeIcons.strokeRoundedSettings01,
+                          () {},
+                        ),
                       ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+                // Card objectif
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     children: [
+                      // Cercle progressif
                       SizedBox(
-                        width: 90,
-                        height: 90,
+                        width: 88,
+                        height: 88,
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
                             SizedBox(
-                              width: 90,
-                              height: 90,
+                              width: 88,
+                              height: 88,
                               child: CircularProgressIndicator(
                                 value: percent,
                                 strokeWidth: 8,
                                 backgroundColor:
-                                    Colors.white.withOpacity(0.2),
-                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white.withValues(alpha: 0.2),
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(
                                   percent >= 1.0
                                       ? AppColors.secondary
                                       : AppColors.accent,
@@ -162,7 +212,7 @@ class HomeContent extends StatelessWidget {
                                   '${(percent * 100).toInt()}%',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 18,
+                                    fontSize: 17,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -170,8 +220,8 @@ class HomeContent extends StatelessWidget {
                                   'OBJECTIF',
                                   style: TextStyle(
                                     color: Colors.white70,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w700,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -180,7 +230,7 @@ class HomeContent extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 20),
+                      const SizedBox(width: 18),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +239,7 @@ class HomeContent extends StatelessWidget {
                               'Objectif hebdomadaire',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 13,
+                                fontSize: 12,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -207,7 +257,7 @@ class HomeContent extends StatelessWidget {
                               child: LinearProgressIndicator(
                                 value: percent,
                                 backgroundColor:
-                                    Colors.white.withOpacity(0.2),
+                                    Colors.white.withValues(alpha: 0.2),
                                 valueColor:
                                     const AlwaysStoppedAnimation<Color>(
                                   AppColors.accent,
@@ -217,7 +267,7 @@ class HomeContent extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Encore ${(goal - ap.totalWeekMinutes).clamp(0, goal)} min pour l\'objectif',
+                              'Encore ${(goal - ap.totalWeekMinutes).clamp(0, goal)} min',
                               style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 11,
@@ -244,88 +294,106 @@ class HomeContent extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
+          color: Colors.white.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
+        child: Center(
+          child: HugeIcon(icon: icon, color: Colors.white, size: 20),
+        ),
       ),
     );
   }
 
-  Widget _buildStatCards(ActivityProvider ap) {
+  Widget _buildStatCards(
+    BuildContext context,
+    ActivityProvider ap,
+    bool isDark,
+  ) {
+    final surfaceColor =
+        isDark ? AppColors.darkSurface : AppColors.surface;
     return Row(
       children: [
         Expanded(
           child: StatCard(
-            icon: Icons.calendar_today_rounded,
+            icon: HugeIcons.strokeRoundedCalendar01,
             iconColor: AppColors.primary,
-            iconBg: AppColors.primary.withOpacity(0.1),
+            iconBg: AppColors.primary.withValues(alpha: 0.12),
             value: '${ap.totalWeekMinutes}m',
             label: 'Cette semaine',
+            surfaceColor: surfaceColor,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: StatCard(
-            icon: Icons.trending_up_rounded,
+            icon: HugeIcons.strokeRoundedChart01,
             iconColor: AppColors.secondary,
-            iconBg: AppColors.secondary.withOpacity(0.1),
+            iconBg: AppColors.secondary.withValues(alpha: 0.12),
             value: '${ap.totalMonthMinutes}m',
             label: 'Ce mois\n${ap.totalMonthSessions} séances',
+            surfaceColor: surfaceColor,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: StatCard(
-            icon: Icons.timer_rounded,
+            icon: HugeIcons.strokeRoundedClock01,
             iconColor: AppColors.accentPurple,
-            iconBg: AppColors.accentPurple.withOpacity(0.1),
+            iconBg: AppColors.accentPurple.withValues(alpha: 0.12),
             value: '${ap.avgDuration.toInt()}m',
             label: 'Moy. durée',
+            surfaceColor: surfaceColor,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildQuickActions(BuildContext context) {
+  Widget _buildQuickActions(BuildContext context, bool isDark) {
+    final textPrimary =
+        isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Actions rapides',
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+            color: textPrimary,
           ),
         ),
         const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
-              child: _quickActionBtn(
+              child: _quickAction(
                 context,
-                icon: '🤖',
+                icon: HugeIcons.strokeRoundedBrain,
                 label: 'AI Coach',
+                sublabel: 'Conseils perso',
                 color: AppColors.primary,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const CoachScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CoachScreen(),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _quickActionBtn(
+              child: _quickAction(
                 context,
-                icon: '📸',
-                label: 'Scanner plat',
+                icon: HugeIcons.strokeRoundedCamera01,
+                label: 'Food Scanner',
+                sublabel: 'Analyse repas',
                 color: AppColors.secondary,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const FoodScannerScreen(),
+                    builder: (_) =>
+                        const FoodScannerScreen(showBackButton: true),
                   ),
                 ),
               ),
@@ -336,41 +404,67 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  Widget _quickActionBtn(
+  Widget _quickAction(
     BuildContext context, {
-    required String icon,
+    required IconData icon,
     required String label,
+    required String sublabel,
     required Color color,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor =
+        isDark ? AppColors.darkSurface : AppColors.surface;
+    final textPrimary =
+        isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
+    final textSecondary =
+        isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.2)),
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.07),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(icon, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: HugeIcon(icon: icon, color: color, size: 22),
               ),
             ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color: color,
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+              ),
+            ),
+            Text(
+              sublabel,
+              style: TextStyle(
+                fontSize: 11,
+                color: textSecondary,
+              ),
             ),
           ],
         ),
@@ -378,22 +472,34 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  Widget _buildChartSection(ActivityProvider ap) {
+  Widget _buildChartSection(
+    BuildContext context,
+    ActivityProvider ap,
+    bool isDark,
+  ) {
     final data = ap.last7DaysData;
-    final maxVal = data.isEmpty
-        ? 60.0
-        : data.reduce((a, b) => a > b ? a : b);
-
+    final maxVal =
+        data.isEmpty ? 60.0 : data.reduce((a, b) => a > b ? a : b);
     final days = ['Ven', 'Sam', 'Dim', 'Lun', 'Mar', 'Mer', 'Jeu'];
+    final surfaceColor =
+        isDark ? AppColors.darkSurface : AppColors.surface;
+    final textPrimary =
+        isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
+    final textSecondary =
+        isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+    final gridColor = isDark
+        ? AppColors.darkBorder.withValues(alpha: 0.5)
+        : Colors.grey.shade100;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black
+                .withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -405,19 +511,30 @@ class HomeContent extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Activité — 7 derniers jours',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: textPrimary,
                 ),
               ),
-              const Text(
-                'min',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'min',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
             ],
@@ -429,7 +546,15 @@ class HomeContent extends StatelessWidget {
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
                 maxY: maxVal > 0 ? maxVal + 20 : 60,
-                barTouchData: BarTouchData(enabled: true),
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) => isDark
+                        ? AppColors.darkSurfaceVariant
+                        : Colors.white,
+                    tooltipRoundedRadius: 8,
+                  ),
+                ),
                 titlesData: FlTitlesData(
                   show: true,
                   leftTitles: const AxisTitles(
@@ -453,9 +578,9 @@ class HomeContent extends StatelessWidget {
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             days[idx],
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: AppColors.textSecondary,
+                              color: textSecondary,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -467,8 +592,8 @@ class HomeContent extends StatelessWidget {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: Colors.grey.shade100,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: gridColor,
                     strokeWidth: 1,
                   ),
                 ),
@@ -480,9 +605,21 @@ class HomeContent extends StatelessWidget {
                     barRods: [
                       BarChartRodData(
                         toY: data[i],
+                        gradient: data[i] > 0
+                            ? const LinearGradient(
+                                colors: [
+                                  Color(0xFF4F46E5),
+                                  Color(0xFF7C3AED),
+                                ],
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                              )
+                            : null,
                         color: data[i] > 0
-                            ? AppColors.primary
-                            : Colors.grey.shade200,
+                            ? null
+                            : (isDark
+                                ? AppColors.darkBorder
+                                : Colors.grey.shade200),
                         width: 20,
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(6),
@@ -499,28 +636,41 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  Widget _buildLastActivity(BuildContext context, ActivityProvider ap) {
+  Widget _buildLastActivity(
+    BuildContext context,
+    ActivityProvider ap,
+    bool isDark,
+  ) {
+    final textPrimary =
+        isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
+    final surfaceColor =
+        isDark ? AppColors.darkSurface : AppColors.surface;
+    final textSecondary =
+        isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Dernière activité',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: textPrimary,
               ),
             ),
             GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const HistoryScreen(),
+                ),
               ),
               child: const Text(
-                'Voir tout >',
+                'Voir tout →',
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.primary,
@@ -535,19 +685,37 @@ class HomeContent extends StatelessWidget {
           ActivityCard(activity: ap.lastActivity!)
         else
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: surfaceColor,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Center(
-              child: Text(
-                'Aucune activité pour l\'instant\nAjoutez votre première séance! 💪',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  height: 1.6,
-                ),
+            child: Center(
+              child: Column(
+                children: [
+                  HugeIcon(
+                    icon: HugeIcons.strokeRoundedDumbbell01,
+                    color: AppColors.primary.withValues(alpha: 0.4),
+                    size: 44,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Aucune activité pour l\'instant',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Ajoutez votre première séance! 💪',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

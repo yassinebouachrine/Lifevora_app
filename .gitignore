@@ -1,0 +1,18 @@
+# Flutter
+**/.dart_tool/
+**/build/
+**/.idea/
+**/*.iml
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.metadata
+**/coverage/
+
+# Android / Gradle
+**/android/.gradle/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# VS Code
+.vscode/

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+import 'package:hugeicons/hugeicons.dart';
+import '../core/constants/app_colors.dart';
 
 class LifevoraBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -13,12 +14,15 @@ class LifevoraBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppColors.darkSurface : AppColors.surface;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: bgColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -26,15 +30,17 @@ class LifevoraBottomNavBar extends StatelessWidget {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _navItem(0, Icons.home_rounded, 'Accueil'),
-              _navItem(1, Icons.history_rounded, 'Historique'),
-              _addButton(),
-              _navItem(3, Icons.emoji_nature_rounded, 'Avatar'),
-              _navItem(4, Icons.person_rounded, 'Profil'),
+              _navItem(context, 0, HugeIcons.strokeRoundedHome01, 'Accueil'),
+              _navItem(context, 1, HugeIcons.strokeRoundedTime01, 'Historique'),
+              _navItem(context, 2, HugeIcons.strokeRoundedBrain, 'Coach'),
+              _addButton(context),
+              _navItem(context, 4, HugeIcons.strokeRoundedCamera01, 'Scanner'),
+              _navItem(context, 5, HugeIcons.strokeRoundedUserCircle, 'Avatar'),
+              _navItem(context, 6, HugeIcons.strokeRoundedUser, 'Profil'),
             ],
           ),
         ),
@@ -42,69 +48,86 @@ class LifevoraBottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _navItem(int index, IconData icon, String label) {
+  Widget _navItem(
+    BuildContext context,
+    int index,
+    IconData icon,
+    String label,
+  ) {
     final isSelected = currentIndex == index;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hintColor = isDark ? AppColors.darkTextHint : AppColors.textHint;
+
     return GestureDetector(
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.primary : AppColors.textHint,
-              size: 24,
+            HugeIcon(
+              icon: icon,
+              color: isSelected ? AppColors.primary : hintColor,
+              size: 20,
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? AppColors.primary : AppColors.textHint,
+                fontSize: 9,
+                fontWeight:
+                    isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? AppColors.primary : hintColor,
               ),
             ),
-            if (isSelected)
-              Container(
-                width: 4,
-                height: 4,
-                margin: const EdgeInsets.only(top: 2),
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(top: 2),
+              width: isSelected ? 4 : 0,
+              height: isSelected ? 4 : 0,
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _addButton() {
+  Widget _addButton(BuildContext context) {
     return GestureDetector(
-      onTap: () => onTap(2),
+      onTap: () => onTap(3),
       child: Container(
-        width: 56,
-        height: 56,
+        width: 46,
+        height: 46,
         decoration: const BoxDecoration(
           gradient: AppColors.primaryGradient,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
               color: Color(0x664F46E5),
-              blurRadius: 16,
+              blurRadius: 14,
               offset: Offset(0, 4),
             ),
           ],
         ),
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        child: const Center(
+          child: HugeIcon(
+            icon: HugeIcons.strokeRoundedAdd01,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
       ),
     );
   }

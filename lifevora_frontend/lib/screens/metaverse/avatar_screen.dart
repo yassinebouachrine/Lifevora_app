@@ -1,9 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:hugeicons/hugeicons.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/user_provider.dart';
-import '../../providers/activity_provider.dart';
 
 class AvatarScreen extends StatefulWidget {
   const AvatarScreen({super.key});
@@ -12,77 +13,39 @@ class AvatarScreen extends StatefulWidget {
   State<AvatarScreen> createState() => _AvatarScreenState();
 }
 
-class _AvatarScreenState extends State<AvatarScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _bounceController;
-  String _selectedAccessory = 'none';
+class _AvatarScreenState extends State<AvatarScreen> {
+  File? _imageFile;           // ✅ nullable, pas de null check forcé
+  final _picker = ImagePicker();
+  bool _isLoading = false;
 
-  final List<Map<String, String>> _accessories = [
-    {'id': 'none', 'name': 'Aucun', 'emoji': '❌'},
-    {'id': 'hat', 'name': 'Casquette', 'emoji': '🧢'},
-    {'id': 'medal', 'name': 'Médaille', 'emoji': '🥇'},
-    {'id': 'fire', 'name': 'Feu', 'emoji': '🔥'},
-    {'id': 'star', 'name': 'Étoile', 'emoji': '⭐'},
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _bounceController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _bounceController.dispose();
-    super.dispose();
-  }
+  // ✅ Getter sécurisé pour isDark
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<UserProvider>().user;
-    final ap = context.watch<ActivityProvider>();
+    final isDark = _isDark;
 
-    final progress = user != null && user.goalMinutesPerWeek > 0
-        ? (ap.totalWeekMinutes / user.goalMinutesPerWeek).clamp(0.0, 1.0)
-        : 0.0;
-
-    final isHappy = progress >= 0.5;
-    final avatarEmoji = isHappy ? '😄' : '😐';
-    final avatarColor = isHappy ? AppColors.secondary : AppColors.primary;
-    final avatarMsg = isHappy
-        ? 'Super! Tu es à ${(progress * 100).toInt()}% de ton objectif! 🎉'
-        : 'Continue tes efforts! Encore ${((1 - progress) * (user?.goalMinutesPerWeek ?? 150)).toInt()} min pour atteindre l\'objectif!';
-
-    final accessoryEmoji = _accessories.firstWhere((a) => a['id'] == _selectedAccessory)['emoji']!;
+    // ✅ watch() avec null safety
+    final userProvider = context.watch<UserProvider>();
+    final user = userProvider.user; // ✅ peut être null, pas de !
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor:
+          isDark ? AppColors.darkBackground : AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildHeader(),
-              const SizedBox(height: 30),
-              _buildAvatarZone(avatarEmoji, avatarColor, accessoryEmoji, isHappy, user?.name ?? '')
-                  .animate()
-                  .fadeIn(delay: 200.ms)
-                  .scale(begin: const Offset(0.8, 0.8)),
-              const SizedBox(height: 24),
-              _buildStatusMessage(avatarMsg, isHappy)
-                  .animate()
-                  .fadeIn(delay: 400.ms)
-                  .slideY(begin: 0.3, end: 0),
-              const SizedBox(height: 24),
-              _buildProgressSection(progress, ap, user?.goalMinutesPerWeek ?? 150)
-                  .animate()
-                  .fadeIn(delay: 500.ms),
-              const SizedBox(height: 24),
-              _buildAccessories().animate().fadeIn(delay: 600.ms),
-              const SizedBox(height: 24),
-              _buildMetaverseStats(ap).animate().fadeIn(delay: 700.ms),
+              const SizedBox(height: 16),
+              _buildAppBar(isDark),
+              const SizedBox(height: 40),
+              _buildAvatarSection(isDark, user?.name),  // ✅ null-safe
+              const SizedBox(height: 32),
+              _buildUserInfo(isDark, user),              // ✅ null-safe
+              const SizedBox(height: 32),
+              _buildSaveButton(isDark),
               const SizedBox(height: 40),
             ],
           ),
@@ -91,394 +54,437 @@ class _AvatarScreenState extends State<AvatarScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildHeader() {
+  // ── AppBar ─────────────────────────────────────────────────────
+  Widget _buildAppBar(bool isDark) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Mon Avatar',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
+        GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: HugeIcon(
+                icon: HugeIcons.strokeRoundedArrowLeft01,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.textPrimary,
+                size: 20,
               ),
             ),
-            Text(
-              'Espace Métaverse 🌐',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(12),
           ),
-          child: const Text(
-            '3D bientôt',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+        ),
+        const SizedBox(width: 14),
+        Text(
+          'Mon Avatar',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.textPrimary,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildAvatarZone(
-    String emoji,
-    Color color,
-    String accessory,
-    bool isHappy,
-    String name,
-  ) {
-    return AnimatedBuilder(
-      animation: _bounceController,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, -10 * _bounceController.value),
-          child: child,
-        );
-      },
-      child: Container(
-        width: double.infinity,
-        height: 280,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              color.withOpacity(0.1),
-              AppColors.primary.withOpacity(0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: color.withOpacity(0.2),
-            width: 2,
-          ),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
+  // ── Avatar Section ─────────────────────────────────────────────
+  Widget _buildAvatarSection(bool isDark, String? userName) {
+    return Column(
+      children: [
+        Stack(
           children: [
-            // Background decorations
-            Positioned(
-              top: 20,
-              right: 20,
-              child: Text(
-                '✨',
-                style: TextStyle(
-                  fontSize: 20,
-                  color: Colors.yellow.withOpacity(0.6),
+            // ✅ Avatar avec null safety complet
+            Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: _imageFile == null
+                    ? AppColors.primaryGradient
+                    : null,
+                border: Border.all(
+                  color: AppColors.primary,
+                  width: 3,
                 ),
-              ),
-            ),
-            Positioned(
-              bottom: 30,
-              left: 30,
-              child: Text(
-                '⭐',
-                style: TextStyle(fontSize: 16, color: Colors.amber.withOpacity(0.5)),
-              ),
-            ),
-            // Avatar body
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Accessory
-                if (accessory != '❌')
-                  Text(accessory, style: const TextStyle(fontSize: 36)),
-                // Avatar circle
-                Container(
-                  width: 110,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
                   ),
-                  child: Center(
-                    child: Text(
-                      emoji,
-                      style: const TextStyle(fontSize: 50),
+                ],
+              ),
+              child: ClipOval(
+                child: _buildAvatarContent(userName),
+              ),
+            ),
+
+            // ✅ Bouton caméra
+            Positioned(
+              bottom: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBackground
+                          : Colors.white,
+                      width: 2,
+                    ),
+                  ),
+                  child: const Center(
+                    child: HugeIcon(
+                      icon: HugeIcons.strokeRoundedCamera01,
+                      color: Colors.white,
+                      size: 18,
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isHappy ? '🏆 Objectif en cours!' : '💪 En progression',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
 
-  Widget _buildStatusMessage(String msg, bool isHappy) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isHappy
-            ? AppColors.success.withOpacity(0.08)
-            : AppColors.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isHappy
-              ? AppColors.success.withOpacity(0.2)
-              : AppColors.primary.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Text(isHappy ? '🎉' : '💡', style: const TextStyle(fontSize: 24)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              msg,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isHappy ? AppColors.success : AppColors.primary,
-                height: 1.5,
-              ),
-            ),
+        const SizedBox(height: 16),
+
+        // ✅ Nom avec fallback
+        Text(
+          userName ?? 'Utilisateur',   // ✅ jamais null
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.textPrimary,
           ),
-        ],
+        ),
+
+        const SizedBox(height: 20),
+
+        // ✅ Boutons action
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _actionChip(
+              icon: HugeIcons.strokeRoundedCamera01,
+              label: 'Caméra',
+              onTap: () => _pickImage(source: ImageSource.camera),
+            ),
+            const SizedBox(width: 12),
+            _actionChip(
+              icon: HugeIcons.strokeRoundedImage01,
+              label: 'Galerie',
+              onTap: () => _pickImage(source: ImageSource.gallery),
+            ),
+            if (_imageFile != null) ...[
+              const SizedBox(width: 12),
+              _actionChip(
+                icon: HugeIcons.strokeRoundedDelete01,
+                label: 'Supprimer',
+                onTap: _removeImage,
+                color: AppColors.error,
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ✅ Contenu avatar avec tous les cas null gérés
+  Widget _buildAvatarContent(String? userName) {
+    // Cas 1 : image sélectionnée
+    if (_imageFile != null) {
+      return Image.file(
+        _imageFile!,    // ✅ safe car on vérifie != null avant
+        fit: BoxFit.cover,
+        width: 130,
+        height: 130,
+        errorBuilder: (_, __, ___) => _defaultAvatar(userName),
+      );
+    }
+
+    // Cas 2 : pas d'image → initiales ou icône
+    return _defaultAvatar(userName);
+  }
+
+  Widget _defaultAvatar(String? userName) {
+    // ✅ Initiales avec null safety
+    final initials = _getInitials(userName);
+
+    return Container(
+      color: AppColors.primary.withValues(alpha: 0.8),
+      child: Center(
+        child: initials.isNotEmpty
+            ? Text(
+                initials,
+                style: const TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              )
+            : const HugeIcon(
+                icon: HugeIcons.strokeRoundedUser,
+                color: Colors.white,
+                size: 52,
+              ),
       ),
     );
   }
 
-  Widget _buildProgressSection(double progress, ActivityProvider ap, int goal) {
+  // ✅ Fonction sécurisée pour extraire les initiales
+  String _getInitials(String? name) {
+    if (name == null || name.trim().isEmpty) return '';
+
+    final parts = name.trim().split(' ')
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  // ── User Info ──────────────────────────────────────────────────
+  Widget _buildUserInfo(bool isDark, dynamic user) {
+    // ✅ Toutes les valeurs avec fallback
+    final name  = user?.name  ?? 'Non défini';
+    final email = user?.email ?? 'Non défini';
+    final age   = user?.age?.toString() ?? '--';
+
+    final surfaceColor =
+        isDark ? AppColors.darkSurface : AppColors.surface;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
+            blurRadius: 16,
+          ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'XP cette semaine',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              Text(
-                '${(progress * 100).toInt()} / 100 XP',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
+          _infoRow(
+            icon: HugeIcons.strokeRoundedUser,
+            label: 'Nom',
+            value: name,
+            isDark: isDark,
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: AppColors.primary.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                progress >= 1.0 ? AppColors.success : AppColors.primary,
-              ),
-              minHeight: 12,
-            ),
+          _divider(isDark),
+          _infoRow(
+            icon: HugeIcons.strokeRoundedMail01,
+            label: 'Email',
+            value: email,
+            isDark: isDark,
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _xpStat('⚡', '${ap.totalWeekMinutes}', 'min actif'),
-              _xpStat('🔥', '${ap.totalMonthSessions}', 'séances/mois'),
-              _xpStat('🎯', '${goal}', 'objectif/sem'),
-            ],
+          _divider(isDark),
+          _infoRow(
+            icon: HugeIcons.strokeRoundedCalendar01,
+            label: 'Âge',
+            value: '$age ans',
+            isDark: isDark,
           ),
         ],
       ),
     );
   }
 
-  Widget _xpStat(String emoji, String value, String label) {
-    return Column(
-      children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
+  Widget _infoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          HugeIcon(
+            icon: icon,
+            color: AppColors.primary,
+            size: 20,
           ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-        ),
-      ],
+          const SizedBox(width: 14),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,   // ✅ jamais null grâce aux fallbacks
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildAccessories() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Accessoires Avatar',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+  Widget _divider(bool isDark) {
+    return Divider(
+      color: isDark ? AppColors.darkBorder : AppColors.border,
+      height: 1,
+    );
+  }
+
+  // ── Save Button ────────────────────────────────────────────────
+  Widget _buildSaveButton(bool isDark) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _saveAvatar,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 80,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _accessories.length,
-            itemBuilder: (context, i) {
-              final acc = _accessories[i];
-              final isSelected = _selectedAccessory == acc['id'];
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedAccessory = acc['id']!),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary : Colors.grey.shade200,
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        if (isSelected)
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(acc['emoji']!, style: const TextStyle(fontSize: 24)),
-                        Text(
-                          acc['name']!,
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+        child: _isLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.5,
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  HugeIcon(
+                    icon: HugeIcons.strokeRoundedCheckmarkCircle01,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'Sauvegarder',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+                ],
+              ),
+      ),
     );
   }
 
-  Widget _buildMetaverseStats(ActivityProvider ap) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '🌐 Stats Métaverse',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
+  // ── Action Chip ────────────────────────────────────────────────
+  Widget _actionChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color color = AppColors.primary,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            HugeIcon(icon: icon, color: color, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _metaStat('🏆', 'Niveau', '${(ap.activities.length / 5).floor() + 1}'),
-              _metaStat('💎', 'Gemmes', '${ap.totalWeekMinutes * 2}'),
-              _metaStat('⚔️', 'Rang', ap.activities.length >= 10 ? 'Or' : 'Bronze'),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _metaStat(String emoji, String label, String value) {
-    return Column(
-      children: [
-        Text(emoji, style: const TextStyle(fontSize: 26)),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
+  // ── Helpers ────────────────────────────────────────────────────
+
+  // ✅ pickImage avec null safety
+  Future<void> _pickImage({ImageSource source = ImageSource.gallery}) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+
+      // ✅ Vérifie que picked n'est pas null avant d'utiliser
+      if (picked != null && mounted) {
+        setState(() {
+          _imageFile = File(picked.path);
+        });
+      }
+    } catch (e) {
+      // ✅ Gestion d'erreur si caméra/galerie non disponible
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString()}'),
+            backgroundColor: AppColors.error,
           ),
+        );
+      }
+    }
+  }
+
+  void _removeImage() {
+    setState(() => _imageFile = null);
+  }
+
+  Future<void> _saveAvatar() async {
+    setState(() => _isLoading = true);
+
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Avatar sauvegardé! ✅'),
+          backgroundColor: AppColors.success,
         ),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Colors.white70),
-        ),
-      ],
-    );
+      );
+      Navigator.pop(context);
+    }
   }
 }
