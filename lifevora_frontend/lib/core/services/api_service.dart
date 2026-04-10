@@ -7,8 +7,20 @@ class ApiService {
   // ⚠️ ADAPTER SELON ENVIRONNEMENT:
   // Android Emulator  → http://10.0.2.2:3000
   // iOS Simulator     → http://localhost:3000
-  // Appareil physique → http://192.168.X.X:3000 (votre IP locale)
-  static const String _baseUrl = 'http://192.168.100.11:3000/api';
+  // Appareil physique → http://192.168.100.127:3000 (IP locale actuelle)
+  static String get _baseUrl {
+    // Android emulator maps 10.0.2.2 → host machine's localhost
+    // Change to your physical device IP if testing on real hardware
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:3000/api'; // Android emulator
+      // return 'http://192.168.100.127:3000/api'; // ← uncomment for physical Android device
+    } else if (Platform.isIOS) {
+      return 'http://localhost:3000/api'; // iOS Simulator
+      // return 'http://192.168.100.127:3000/api'; // ← uncomment for physical iOS device
+    }
+    return 'http://192.168.100.127:3000/api'; // fallback
+  }
+
   static const String _tokenKey = 'auth_token';
   static const Duration _timeout = Duration(seconds: 15);
 
