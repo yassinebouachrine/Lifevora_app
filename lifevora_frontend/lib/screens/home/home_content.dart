@@ -13,6 +13,10 @@ import '../history/history_screen.dart';
 import '../smart_coach/coach_screen.dart';
 import '../food_scanner/food_scanner_screen.dart';
 
+import '../settings/settings_screen.dart';
+
+
+
 // ✅ Convertir en StatefulWidget pour le refresh API
 class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
@@ -213,14 +217,23 @@ class _HomeContentState extends State<HomeContent> {
                     ),
                     Row(
                       children: [
+                        // ✅ Bouton thème (moon/sun)
                         _iconBtn(
-                          HugeIcons.strokeRoundedMoon01,
+                          isDark
+                              ? HugeIcons.strokeRoundedSun01
+                              : HugeIcons.strokeRoundedMoon01,
                           () => context.read<ThemeProvider>().toggleTheme(),
                         ),
                         const SizedBox(width: 8),
+                        // ✅ Bouton settings
                         _iconBtn(
                           HugeIcons.strokeRoundedSettings01,
-                          () {},
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SettingsScreen(),
+                            ),
+                          ),
                         ),
                       ],
                     ),
