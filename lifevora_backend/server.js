@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const { testConnection } = require('./src/config/database');
+const { initDatabase } = require('./src/config/initDatabase');
 const { errorMiddleware, notFoundMiddleware } = require('./src/middleware/errorMiddleware');
 
 const authRoutes = require('./src/routes/authRoutes');
@@ -52,7 +53,8 @@ app.use(errorMiddleware);
 
 // Démarrage
 const startServer = async () => {
-    await testConnection();
+    await initDatabase();   // create DB + tables if they don't exist
+    await testConnection(); // verify pool connection
     app.listen(PORT, '0.0.0.0', () => {
         console.log('');
         console.log('🚀 ================================');
