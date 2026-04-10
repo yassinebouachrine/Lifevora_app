@@ -149,7 +149,7 @@ class UserProvider extends ChangeNotifier {
   }
 
   // ============================================================
-  // SAVE USER (local uniquement, ex: après register/login)
+  // SAVE USER (local uniquement)
   // ============================================================
   Future<void> saveUser(UserModel user) async {
     _user = user;
@@ -191,6 +191,66 @@ class UserProvider extends ChangeNotifier {
   }
 
   // ============================================================
+  // ✅ UPDATE PROFILE (données partielles) → API + cache local
+  // Utilisé par: settings_screen, edit_profile_screen
+  // ============================================================
+  Future<Map<String, dynamic>> updateProfile(
+      Map<String, dynamic> data) async {
+    try {
+      // ✅ Appel API
+      final result = await ApiService.updateProfile(data);
+
+      if (result['success'] == true && _user != null) {
+        // ✅ Mettre à jour le cache local avec les nouvelles données
+        bool needsUpdate = false;
+        String? newName = _user!.name;
+        int? newAge = _user!.age;
+        int? newGoal = _user!.goalMinutesPerWeek;
+        String? newAvatarState = _user!.avatarState;
+
+        if (data.containsKey('name') && data['name'] != null) {
+          newName = data['name'].toString();
+          needsUpdate = true;
+        }
+        if (data.containsKey('age') && data['age'] != null) {
+          newAge = data['age'] is int
+              ? data['age']
+              : int.tryParse(data['age'].toString()) ?? _user!.age;
+          needsUpdate = true;
+        }
+        if (data.containsKey('goalMinutesPerWeek') &&
+            data['goalMinutesPerWeek'] != null) {
+          newGoal = data['goalMinutesPerWeek'] is int
+              ? data['goalMinutesPerWeek']
+              : int.tryParse(data['goalMinutesPerWeek'].toString()) ??
+                  _user!.goalMinutesPerWeek;
+          needsUpdate = true;
+        }
+        if (data.containsKey('avatarState') && data['avatarState'] != null) {
+          newAvatarState = data['avatarState'].toString();
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          _user = _user!.copyWith(
+            name: newName,
+            age: newAge,
+            goalMinutesPerWeek: newGoal,
+            avatarState: newAvatarState,
+          );
+          await _saveUserLocal(_user!);
+          notifyListeners();
+        }
+      }
+
+      return result;
+    } catch (e) {
+      debugPrint('Erreur updateProfile: $e');
+      return {'success': false, 'message': 'Erreur serveur'};
+    }
+  }
+
+  // ============================================================
   // UPDATE AVATAR STATE → API + cache local
   // ============================================================
   Future<void> updateAvatarState(String state) async {
@@ -200,7 +260,6 @@ class UserProvider extends ChangeNotifier {
     await _saveUserLocal(_user!);
     notifyListeners();
 
-    // Sync avec API en arrière-plan
     try {
       await ApiService.updateProfile({'avatarState': state});
     } catch (e) {
@@ -232,7 +291,6 @@ class UserProvider extends ChangeNotifier {
       );
 
       if (result['success'] == true && _user != null) {
-        // Mettre à jour l'objectif local si fourni
         _user = _user!.copyWith(
           age: age ?? _user!.age,
           goalMinutesPerWeek: goalMinutesPerWeek,
@@ -254,10 +312,14 @@ class UserProvider extends ChangeNotifier {
     required String currentPassword,
     required String newPassword,
   }) async {
-    return await ApiService.changePassword(
-      currentPassword: currentPassword,
-      newPassword: newPassword,
-    );
+    try {
+      return await ApiService.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+    } catch (e) {
+      return {'success': false, 'message': 'Erreur de connexion'};
+    }
   }
 
   // ============================================================
@@ -272,23 +334,22 @@ class UserProvider extends ChangeNotifier {
 
     _user = null;
     _isDarkMode = false;
+    _errorMessage = null;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user');
     await prefs.remove('isDarkMode');
-    // Garder les settings de thème mais effacer les données user
-    
+
     notifyListeners();
   }
 
   // ============================================================
-  // TOGGLE DARK MODE (local)
+  // TOGGLE DARK MODE (local + sync API)
   // ============================================================
   void toggleDarkMode() {
     _isDarkMode = !_isDarkMode;
     _saveDarkMode(_isDarkMode);
 
-    // Sync API en arrière-plan
     ApiService.updateProfile({
       'themeMode': _isDarkMode ? 'dark' : 'light',
     }).catchError((e) => debugPrint('Erreur sync themeMode: $e'));

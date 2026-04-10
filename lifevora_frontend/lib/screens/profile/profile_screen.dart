@@ -7,6 +7,11 @@ import '../../providers/user_provider.dart';
 import '../../providers/activity_provider.dart';
 import '../auth/auth_gate_screen.dart';
 
+
+import '../settings/settings_screen.dart';
+import 'edit_profile_screen.dart';
+
+
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -92,15 +97,51 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         const Spacer(),
+
+        // ✅ Bouton Settings
         GestureDetector(
-          onTap: () {},
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ),
           child: Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.darkSurface
-                  : AppColors.surface,
+              color: isDark ? AppColors.darkSurface : AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: Center(
+              child: HugeIcon(
+                icon: HugeIcons.strokeRoundedSettings01,
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.textSecondary,
+                size: 18,
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 8),
+
+        // ✅ Bouton Edit Profil
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+          ),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : AppColors.surface,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
@@ -543,16 +584,19 @@ Widget _buildBadges(
         'icon': HugeIcons.strokeRoundedNotification01,
         'label': 'Notifications',
         'color': AppColors.primary,
+        'screen': const SettingsScreen(),
       },
       {
         'icon': HugeIcons.strokeRoundedShield01,
         'label': 'Confidentialité',
         'color': AppColors.secondary,
+        'screen': const SettingsScreen(),
       },
       {
         'icon': HugeIcons.strokeRoundedHelpCircle,
         'label': 'Aide & Support',
         'color': AppColors.accentPurple,
+        'screen': const SettingsScreen(),
       },
     ];
 
@@ -562,8 +606,7 @@ Widget _buildBadges(
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black
-                .withValues(alpha: isDark ? 0.2 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 8,
           ),
         ],
@@ -578,7 +621,13 @@ Widget _buildBadges(
           return Column(
             children: [
               GestureDetector(
-                onTap: () {},
+                // ✅ Naviguer vers SettingsScreen
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => item['screen'] as Widget,
+                  ),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -624,9 +673,7 @@ Widget _buildBadges(
                 Divider(
                   height: 1,
                   indent: 68,
-                  color: isDark
-                      ? AppColors.darkBorder
-                      : AppColors.border,
+                  color: isDark ? AppColors.darkBorder : AppColors.border,
                 ),
             ],
           );
