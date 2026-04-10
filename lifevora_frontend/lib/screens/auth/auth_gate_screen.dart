@@ -1,6 +1,3 @@
-// Remplacer UNIQUEMENT la section _buildButtons
-// Le bouton "Continuer sans compte" doit aller vers HomeScreen directement
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -10,18 +7,171 @@ import '../../models/user_model.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/activity_provider.dart';
+import '../../core/services/api_service.dart';
 import '../home/home_screen.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 
-class AuthGateScreen extends StatelessWidget {
+class AuthGateScreen extends StatefulWidget {
   const AuthGateScreen({super.key});
+
+  @override
+  State<AuthGateScreen> createState() => _AuthGateScreenState();
+}
+
+class _AuthGateScreenState extends State<AuthGateScreen> {
+  bool _isChecking = true; // ✅ Vérification token au démarrage
+
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingSession();
+  }
+
+  // ============================================================
+  // ✅ Vérifier si un token valide existe au démarrage
+  // ============================================================
+  Future<void> _checkExistingSession() async {
+    try {
+      final hasToken = await ApiService.hasToken();
+
+      if (!hasToken) {
+        // Pas de token → afficher l'écran d'accueil
+        if (mounted) setState(() => _isChecking = false);
+        return;
+      }
+
+      // Token existe → vérifier sa validité avec /api/auth/me
+      final result = await ApiService.getMe();
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        // ✅ Token valide → restaurer l'utilisateur et aller sur Home
+        final userData = result['data']['user'];
+        final user = UserModel.fromJson(userData);
+
+        await context.read<UserProvider>().saveUser(user);
+        if (!mounted) return;
+
+        // Charger les activités
+        await context.read<ActivityProvider>().loadActivities(user.id);
+        if (!mounted) return;
+
+        // Naviguer vers Home directement
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (_) => false,
+        );
+      } else {
+        // ✅ Token invalide/expiré → clear et afficher AuthGate
+        await ApiService.clearToken();
+        if (mounted) setState(() => _isChecking = false);
+      }
+    } catch (e) {
+      // ✅ Erreur réseau → vérifier si user en cache local
+      debugPrint('Erreur _checkExistingSession: $e');
+
+      if (!mounted) return;
+
+      // Tenter de charger depuis le cache local
+      await context.read<UserProvider>().loadUser();
+      final cachedUser = context.read<UserProvider>().user;
+
+      if (cachedUser != null && mounted) {
+        // Cache disponible → aller en Home (mode hors-ligne)
+        await context.read<ActivityProvider>().loadActivities(cachedUser.id);
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (_) => false,
+          );
+        }
+      } else {
+        if (mounted) setState(() => _isChecking = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.darkBackground : AppColors.background;
 
+    // ✅ Splash screen pendant la vérification du token
+    if (_isChecking) {
+      return Scaffold(
+        backgroundColor: bg,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x554F46E5),
+                      blurRadius: 24,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      decoration: const BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                      ),
+                      child: const Center(
+                        child: HugeIcon(
+                          icon: HugeIcons.strokeRoundedDumbbell01,
+                          color: Colors.white,
+                          size: 44,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+                  .animate()
+                  .fadeIn(duration: 600.ms)
+                  .scale(begin: const Offset(0.7, 0.7)),
+              const SizedBox(height: 20),
+              const Text(
+                'Lifevora',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primary,
+                  letterSpacing: -1,
+                ),
+              ).animate().fadeIn(delay: 200.ms),
+              const SizedBox(height: 40),
+              // ✅ Loader
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                  strokeWidth: 3,
+                ),
+              ).animate().fadeIn(delay: 400.ms),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ✅ Écran principal AuthGate
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
@@ -120,8 +270,7 @@ class AuthGateScreen extends StatelessWidget {
     );
   }
 
-// Dans _buildTitle, remplacer la Row des feature badges par :
-Widget _buildTitle(bool isDark) {
+  Widget _buildTitle(bool isDark) {
     final textPrimary =
         isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
     final textSecondary =
@@ -150,7 +299,6 @@ Widget _buildTitle(bool isDark) {
           ),
         ),
         const SizedBox(height: 24),
-        // ✅ Wrap évite l'overflow
         Wrap(
           alignment: WrapAlignment.center,
           spacing: 8,
@@ -284,7 +432,7 @@ Widget _buildTitle(bool isDark) {
         ),
         const SizedBox(height: 16),
 
-        // ✅ Continuer sans compte → HomeScreen directement
+        // ✅ Continuer sans compte → HomeScreen (mode invité)
         TextButton(
           onPressed: () => _continueWithoutAccount(context),
           child: Text(
@@ -301,7 +449,7 @@ Widget _buildTitle(bool isDark) {
     );
   }
 
-  // ✅ Créer un user invité et aller sur HomeScreen
+  // ✅ Mode invité - pas d'API, données locales uniquement
   Future<void> _continueWithoutAccount(BuildContext context) async {
     final guestUser = UserModel(
       id: 'guest_${DateTime.now().millisecondsSinceEpoch}',
@@ -313,17 +461,15 @@ Widget _buildTitle(bool isDark) {
 
     await context.read<UserProvider>().saveUser(guestUser);
     if (!context.mounted) return;
-    await context
-        .read<ActivityProvider>()
-        .loadActivities(guestUser.id);
 
-    if (context.mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (_) => false,
-      );
-    }
+    await context.read<ActivityProvider>().loadActivities(guestUser.id);
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (_) => false,
+    );
   }
 }
 

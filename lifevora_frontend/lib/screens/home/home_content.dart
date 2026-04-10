@@ -13,8 +13,39 @@ import '../history/history_screen.dart';
 import '../smart_coach/coach_screen.dart';
 import '../food_scanner/food_scanner_screen.dart';
 
-class HomeContent extends StatelessWidget {
+// ✅ Convertir en StatefulWidget pour le refresh API
+class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
+
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ✅ Charger les données au premier affichage
+    if (!_initialized) {
+      _initialized = true;
+      _loadData();
+    }
+  }
+
+  Future<void> _loadData() async {
+    final userProvider = context.read<UserProvider>();
+    final activityProvider = context.read<ActivityProvider>();
+    final userId = userProvider.user?.id;
+
+    if (userId != null && userId.isNotEmpty) {
+      // ✅ Sync activités depuis API
+      await activityProvider.forceSync(userId);
+      // ✅ Refresh user depuis API
+      await userProvider.refreshUser();
+    }
+  }
 
   String _getGreeting() {
     final h = DateTime.now().hour;
@@ -32,40 +63,71 @@ class HomeContent extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bg,
-      body: CustomScrollView(
-        slivers: [
-          _buildHeader(
-            context,
-            user?.name ?? '',
-            ap,
-            user?.goalMinutesPerWeek ?? 150,
-            isDark,
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.all(20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildStatCards(context, ap, isDark)
-                    .animate()
-                    .fadeIn(delay: 200.ms)
-                    .slideY(begin: 0.3, end: 0),
-                const SizedBox(height: 24),
-                _buildQuickActions(context, isDark)
-                    .animate()
-                    .fadeIn(delay: 300.ms),
-                const SizedBox(height: 24),
-                _buildChartSection(context, ap, isDark)
-                    .animate()
-                    .fadeIn(delay: 400.ms),
-                const SizedBox(height: 24),
-                _buildLastActivity(context, ap, isDark)
-                    .animate()
-                    .fadeIn(delay: 500.ms),
-                const SizedBox(height: 100),
-              ]),
+      body: RefreshIndicator(
+        // ✅ Pull-to-refresh
+        onRefresh: _loadData,
+        color: AppColors.primary,
+        child: CustomScrollView(
+          slivers: [
+            _buildHeader(
+              context,
+              user?.name ?? '',
+              ap,
+              user?.goalMinutesPerWeek ?? 150,
+              isDark,
             ),
-          ),
-        ],
+            SliverPadding(
+              padding: const EdgeInsets.all(20),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  // ✅ Indicateur de sync en arrière-plan
+                  if (ap.isSyncing)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Synchronisation...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.primary.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  _buildStatCards(context, ap, isDark)
+                      .animate()
+                      .fadeIn(delay: 200.ms)
+                      .slideY(begin: 0.3, end: 0),
+                  const SizedBox(height: 24),
+                  _buildQuickActions(context, isDark)
+                      .animate()
+                      .fadeIn(delay: 300.ms),
+                  const SizedBox(height: 24),
+                  _buildChartSection(context, ap, isDark)
+                      .animate()
+                      .fadeIn(delay: 400.ms),
+                  const SizedBox(height: 24),
+                  _buildLastActivity(context, ap, isDark)
+                      .animate()
+                      .fadeIn(delay: 500.ms),
+                  const SizedBox(height: 100),
+                ]),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -79,9 +141,8 @@ class HomeContent extends StatelessWidget {
   ) {
     final percent =
         goal > 0 ? (ap.totalWeekMinutes / goal).clamp(0.0, 1.0) : 0.0;
-    final gradient = isDark
-        ? AppColors.darkHeaderGradient
-        : AppColors.headerGradient;
+    final gradient =
+        isDark ? AppColors.darkHeaderGradient : AppColors.headerGradient;
 
     return SliverToBoxAdapter(
       child: Container(
@@ -101,7 +162,6 @@ class HomeContent extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    // Logo + nom
                     Expanded(
                       child: Row(
                         children: [
@@ -116,10 +176,8 @@ class HomeContent extends StatelessWidget {
                                 width: 38,
                                 height: 38,
                                 decoration: BoxDecoration(
-                                  color: Colors.white
-                                      .withValues(alpha: 0.2),
-                                  borderRadius:
-                                      BorderRadius.circular(12),
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: const HugeIcon(
                                   icon: HugeIcons.strokeRoundedDumbbell01,
@@ -153,14 +211,11 @@ class HomeContent extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Boutons header
                     Row(
                       children: [
                         _iconBtn(
                           HugeIcons.strokeRoundedMoon01,
-                          () => context
-                              .read<ThemeProvider>()
-                              .toggleTheme(),
+                          () => context.read<ThemeProvider>().toggleTheme(),
                         ),
                         const SizedBox(width: 8),
                         _iconBtn(
@@ -172,7 +227,6 @@ class HomeContent extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 20),
-                // Card objectif
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -181,7 +235,6 @@ class HomeContent extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      // Cercle progressif
                       SizedBox(
                         width: 88,
                         height: 88,
@@ -196,8 +249,7 @@ class HomeContent extends StatelessWidget {
                                 strokeWidth: 8,
                                 backgroundColor:
                                     Colors.white.withValues(alpha: 0.2),
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(
+                                valueColor: AlwaysStoppedAnimation<Color>(
                                   percent >= 1.0
                                       ? AppColors.secondary
                                       : AppColors.accent,
@@ -309,8 +361,7 @@ class HomeContent extends StatelessWidget {
     ActivityProvider ap,
     bool isDark,
   ) {
-    final surfaceColor =
-        isDark ? AppColors.darkSurface : AppColors.surface;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     return Row(
       children: [
         Expanded(
@@ -375,9 +426,7 @@ class HomeContent extends StatelessWidget {
                 color: AppColors.primary,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const CoachScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CoachScreen()),
                 ),
               ),
             ),
@@ -392,8 +441,7 @@ class HomeContent extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        const FoodScannerScreen(showBackButton: true),
+                    builder: (_) => const FoodScannerScreen(showBackButton: true),
                   ),
                 ),
               ),
@@ -413,8 +461,7 @@ class HomeContent extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor =
-        isDark ? AppColors.darkSurface : AppColors.surface;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final textPrimary =
         isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
     final textSecondary =
@@ -461,10 +508,7 @@ class HomeContent extends StatelessWidget {
             ),
             Text(
               sublabel,
-              style: TextStyle(
-                fontSize: 11,
-                color: textSecondary,
-              ),
+              style: TextStyle(fontSize: 11, color: textSecondary),
             ),
           ],
         ),
@@ -481,8 +525,7 @@ class HomeContent extends StatelessWidget {
     final maxVal =
         data.isEmpty ? 60.0 : data.reduce((a, b) => a > b ? a : b);
     final days = ['Ven', 'Sam', 'Dim', 'Lun', 'Mar', 'Mer', 'Jeu'];
-    final surfaceColor =
-        isDark ? AppColors.darkSurface : AppColors.surface;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final textPrimary =
         isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
     final textSecondary =
@@ -498,8 +541,7 @@ class HomeContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black
-                .withValues(alpha: isDark ? 0.2 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -520,10 +562,7 @@ class HomeContent extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -643,8 +682,7 @@ class HomeContent extends StatelessWidget {
   ) {
     final textPrimary =
         isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
-    final surfaceColor =
-        isDark ? AppColors.darkSurface : AppColors.surface;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final textSecondary =
         isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
 
@@ -665,9 +703,7 @@ class HomeContent extends StatelessWidget {
             GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const HistoryScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
               ),
               child: const Text(
                 'Voir tout →',
@@ -710,10 +746,7 @@ class HomeContent extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Ajoutez votre première séance! 💪',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: textSecondary,
-                    ),
+                    style: TextStyle(fontSize: 13, color: textSecondary),
                   ),
                 ],
               ),
