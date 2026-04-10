@@ -25,12 +25,14 @@ class UserModel {
       };
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
-        id: json['id'],
-        name: json['name'],
-        age: json['age'],
-        goalMinutesPerWeek: json['goalMinutesPerWeek'],
-        email: json['email'],
-        avatarState: json['avatarState'] ?? 'neutral',
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        age: json['age'] is int ? json['age'] : int.tryParse(json['age'].toString()) ?? 25,
+        goalMinutesPerWeek: json['goalMinutesPerWeek'] is int
+            ? json['goalMinutesPerWeek']
+            : int.tryParse(json['goalMinutesPerWeek'].toString()) ?? 150,
+        email: json['email']?.toString(),
+        avatarState: json['avatarState']?.toString() ?? 'neutral',
       );
 
   UserModel copyWith({

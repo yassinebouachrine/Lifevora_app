@@ -15,6 +15,43 @@ class AddActivityScreen extends StatefulWidget {
 }
 
 class _AddActivityScreenState extends State<AddActivityScreen> {
+  // ✅ Ajouter ces maps de conversion EN HAUT de la classe _AddActivityScreenState
+
+  // Mapping UI → Backend
+  static const Map<String, String> _typeToApi = {
+    'Course': 'course',
+    'Marche': 'marche',
+    'Vélo': 'velo',
+    'Yoga': 'yoga',
+    'Natation': 'natation',
+    'Musculation': 'musculation',
+  };
+
+  static const Map<String, String> _intensityToApi = {
+    'Faible': 'faible',
+    'Modéré': 'modere',
+    'Élevé': 'eleve',
+  };
+
+  // Mapping Backend → UI (pour mode édition)
+  static const Map<String, String> _typeFromApi = {
+    'course': 'Course',
+    'marche': 'Marche',
+    'velo': 'Vélo',
+    'yoga': 'Yoga',
+    'natation': 'Natation',
+    'musculation': 'Musculation',
+  };
+
+  static const Map<String, String> _intensityFromApi = {
+    'faible': 'Faible',
+    'modere': 'Modéré',
+    'eleve': 'Élevé',
+  };
+  
+  
+  
+  
   String _selectedType = 'Course';
   int _duration = 30;
   String _intensity = 'Modéré';
@@ -43,11 +80,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
     super.initState();
     if (widget.editActivity != null) {
       final ea = widget.editActivity!;
-      _selectedType = ea.type;
+      // ✅ Convertir depuis API vers UI display
+      _selectedType = _typeFromApi[ea.type] ?? ea.type;
       _duration = ea.durationMin;
-      _intensity = ea.intensity;
+      _intensity = _intensityFromApi[ea.intensity] ?? ea.intensity;
       _note = ea.note ?? '';
-      _selectedDate = DateTime.parse(ea.dateISO);
+      _selectedDate = DateTime.tryParse(ea.dateISO) ?? DateTime.now();
     }
     _noteController = TextEditingController(text: _note);
   }
@@ -465,33 +503,56 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   }
 
   Future<void> _handleSave() async {
-    final userId = context.read<UserProvider>().user?.id ?? '';
+    final userProvider = context.read<UserProvider>();
     final ap = context.read<ActivityProvider>();
+    final userId = userProvider.user?.id ?? '';
+
+    if (userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erreur: utilisateur non connecté'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    // ✅ Convertir UI → API format
+    final apiType = _typeToApi[_selectedType] ?? _selectedType.toLowerCase();
+    final apiIntensity = _intensityToApi[_intensity] ?? _intensity.toLowerCase();
+    final apiDate = _selectedDate.toIso8601String().split('T').first;
+
+    // ✅ ID temporaire UUID-like pour optimistic update
+    final tempId = widget.editActivity?.id ??
+        'tmp_${DateTime.now().millisecondsSinceEpoch}';
 
     final activity = ActivityModel(
-      id: widget.editActivity?.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
+      id: tempId,
       userId: userId,
-      type: _selectedType,
+      type: apiType,           // ✅ 'course' pas 'Course'
       durationMin: _duration,
-      intensity: _intensity,
-      dateISO: _selectedDate.toIso8601String().split('T').first,
+      intensity: apiIntensity, // ✅ 'modere' pas 'Modéré'
+      dateISO: apiDate,
       note: _note.isNotEmpty ? _note : null,
     );
 
+    Map<String, dynamic> result;
+
     if (widget.editActivity != null) {
-      await ap.updateActivity(activity);
+      result = await ap.updateActivity(activity);
     } else {
-      await ap.addActivity(activity);
+      result = await ap.addActivity(activity);
     }
 
-    if (mounted) {
+    if (!mounted) return;
+
+    if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             widget.editActivity != null
-                ? 'Activité mise à jour!'
-                : 'Activité ajoutée!',
+                ? '✅ Activité mise à jour!'
+                : '✅ Activité ajoutée!',
           ),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
@@ -501,6 +562,18 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
         ),
       );
       Navigator.pop(context);
+    } else {
+      // ✅ Afficher erreur si l'API échoue
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Erreur lors de la sauvegarde'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
     }
   }
 }

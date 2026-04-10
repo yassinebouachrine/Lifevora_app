@@ -675,8 +675,8 @@ Widget _buildBadges(
     );
   }
 
+// ── Remplacer _handleLogout ────────────────────────────────────
   Future<void> _handleLogout(BuildContext context) async {
-    // Confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) {
@@ -737,10 +737,16 @@ Widget _buildBadges(
     );
 
     if (confirm == true && context.mounted) {
-      // Déconnexion
+      final userId = context.read<UserProvider>().user?.id ?? '';
+
+      // ✅ 1. Vider les activités locales
+      await context.read<ActivityProvider>().clearActivities(userId);
+
+      // ✅ 2. Logout API + clear token + clear user local
       await context.read<UserProvider>().logout();
+
       if (context.mounted) {
-        // ✅ Rediriger vers AuthGateScreen (pas WelcomeScreen)
+        // ✅ 3. Rediriger vers AuthGateScreen
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const AuthGateScreen()),

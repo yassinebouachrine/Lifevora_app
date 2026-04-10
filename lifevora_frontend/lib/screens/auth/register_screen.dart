@@ -830,8 +830,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _showError('Veuillez entrer un email valide');
       return;
     }
-    if (_passwordController.text.length < 4) {
-      _showError('Mot de passe trop court (min. 4 caractères)');
+    // ✅ Minimum 6 caractères (validation backend)
+    if (_passwordController.text.length < 6) {
+      _showError('Mot de passe trop court (min. 6 caractères)');
       return;
     }
     _nextPage();
@@ -865,30 +866,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _handleRegister() async {
     setState(() => _isLoading = true);
 
-    await Future.delayed(const Duration(seconds: 1));
-
-    final user = UserModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text.isEmpty
-          ? 'Utilisateur'
-          : _nameController.text,
-      age: int.tryParse(_ageController.text) ?? 25,
-      goalMinutesPerWeek: int.tryParse(_goalController.text) ?? 150,
-      email: _emailController.text,
-    );
-
-    if (!mounted) return;
-    await context.read<UserProvider>().saveUser(user);
-    if (!mounted) return;
-    await context.read<ActivityProvider>().loadActivities(user.id);
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (_) => false,
+    try {
+      // ✅ Appel API réel
+      final result = await context.read<UserProvider>().register(
+        name: _nameController.text.trim().isEmpty
+            ? 'Utilisateur'
+            : _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        age: int.tryParse(_ageController.text) ?? 25,
       );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        final user = context.read<UserProvider>().user;
+
+        // ✅ Envoyer les données de profil (onboarding)
+        if (user != null) {
+          await context.read<UserProvider>().completeOnboarding(
+            age: int.tryParse(_ageController.text) ?? 25,
+            goalMinutesPerWeek: int.tryParse(_goalController.text) ?? 150,
+          );
+
+          await context.read<ActivityProvider>().loadActivities(user.id);
+        }
+
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (_) => false,
+          );
+        }
+      } else {
+        setState(() => _isLoading = false);
+        _showError(result['message'] ?? 'Erreur lors de la création du compte');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showError('Impossible de joindre le serveur');
+      }
     }
   }
 }

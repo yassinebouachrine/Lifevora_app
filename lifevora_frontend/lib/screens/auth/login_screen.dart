@@ -519,39 +519,48 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    await Future.delayed(const Duration(seconds: 1));
-
-    final email = _emailController.text.trim();
-    final rawName = email.split('@').first;
-    final name = rawName.isNotEmpty
-        ? rawName[0].toUpperCase() + rawName.substring(1)
-        : 'Utilisateur';
-
-    final user = UserModel(
-      id: email.hashCode.abs().toString(),
-      name: name,
-      age: 25,
-      goalMinutesPerWeek: 150,
-      email: email,
-    );
-
-    if (!mounted) return;
-    await context.read<UserProvider>().saveUser(user);
-    if (!mounted) return;
-    await context.read<ActivityProvider>().loadActivities(user.id);
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (_) => false,
+    try {
+      // ✅ Appel API réel
+      final result = await context.read<UserProvider>().login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        // ✅ Charger les activités après login
+        final user = context.read<UserProvider>().user;
+        if (user != null) {
+          await context.read<ActivityProvider>().loadActivities(user.id);
+        }
+
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (_) => false,
+          );
+        }
+      } else {
+        setState(() {
+          _errorMessage = result['message'] ?? 'Email ou mot de passe incorrect';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Impossible de joindre le serveur';
+          _isLoading = false;
+        });
+      }
     }
   }
 }

@@ -10,16 +10,16 @@ dependencies:
   flutter:
     sdk: flutter
   provider: ^6.1.1
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.2.2    # ← une seule fois (tu avais doublon)
   fl_chart: ^0.68.0
   flutter_animate: ^4.5.0
   google_fonts: ^6.1.0
   image_picker: ^1.0.7
   cupertino_icons: ^1.0.6
-  http: ^1.2.0
-  # Icons professionnels
+  http: ^1.1.0
   hugeicons: ^0.0.7
-
+  uuid: ^4.2.1                  # ← AJOUTER
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
