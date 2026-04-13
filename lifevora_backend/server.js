@@ -56,11 +56,22 @@ const startServer = async () => {
     await initDatabase();   // create DB + tables if they don't exist
     await testConnection(); // verify pool connection
     app.listen(PORT, '0.0.0.0', () => {
+        const os = require('os');
+        const networkInterfaces = os.networkInterfaces();
+        let localIp = 'localhost';
+        for (const interfaceName in networkInterfaces) {
+            for (const iface of networkInterfaces[interfaceName]) {
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    localIp = iface.address;
+                }
+            }
+        }
+        
         console.log('');
         console.log('🚀 ================================');
         console.log(`🏃  Lifevora Backend démarré!`);
         console.log(`📡  Port     : ${PORT}`);
-        console.log(`🌍  Local    : http://192.168.100.11:${PORT}`);
+        console.log(`🌍  Local    : http://${localIp}:${PORT}`);
         console.log(`📱  Emulator : http://10.0.2.2:${PORT}`);
         console.log('🚀 ================================');
         console.log('');

@@ -33,22 +33,44 @@ class _AvatarScreenState extends State<AvatarScreen> {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 16),
-              _buildAppBar(isDark),
-              const SizedBox(height: 40),
-              _buildAvatarSection(isDark, user?.name),  // ✅ null-safe
-              const SizedBox(height: 32),
-              _buildUserInfo(isDark, user),              // ✅ null-safe
-              const SizedBox(height: 32),
-              _buildSaveButton(isDark),
-              const SizedBox(height: 40),
-            ],
-          ),
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _buildAppBar(isDark),
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              _buildAvatarSection(isDark, user?.name),
+                              const SizedBox(height: 32),
+                              _buildUserInfo(isDark, user),
+                              const SizedBox(height: 32),
+                              _buildSaveButton(isDark),
+                              const SizedBox(height: 24),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -101,8 +123,8 @@ class _AvatarScreenState extends State<AvatarScreen> {
           children: [
             // ✅ Avatar avec null safety complet
             Container(
-              width: 130,
-              height: 130,
+              width: 180,
+              height: 180,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: _imageFile == null
@@ -210,8 +232,8 @@ class _AvatarScreenState extends State<AvatarScreen> {
       return Image.file(
         _imageFile!,    // ✅ safe car on vérifie != null avant
         fit: BoxFit.cover,
-        width: 130,
-        height: 130,
+        width: 180,
+        height: 180,
         errorBuilder: (_, __, ___) => _defaultAvatar(userName),
       );
     }
@@ -231,7 +253,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
             ? Text(
                 initials,
                 style: const TextStyle(
-                  fontSize: 42,
+                  fontSize: 52,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                 ),

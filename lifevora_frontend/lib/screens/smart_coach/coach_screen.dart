@@ -26,7 +26,9 @@ class _CoachScreenState extends State<CoachScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<CoachProvider>().initConversation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CoachProvider>().initConversation();
+    });
   }
 
   @override

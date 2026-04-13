@@ -204,9 +204,6 @@ JWT_SECRET=your_super_secret_jwt_key
 JWT_EXPIRES_IN=7d
 ```
 
-> ⚠️ **Never commit your `.env` file.** It is already excluded in `.gitignore`.
-
----
 
 ## API Reference
 

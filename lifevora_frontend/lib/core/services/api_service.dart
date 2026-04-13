@@ -4,21 +4,23 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // ⚠️ ADAPTER SELON ENVIRONNEMENT:
+  // ADAPTER SELON ENVIRONNEMENT:
   // Android Emulator  → http://10.0.2.2:3000
   // iOS Simulator     → http://localhost:3000
-  // Appareil physique → http://192.168.100.127:3000 (IP locale actuelle)
+  //
+  // Pour un appareil physique, utilisez --dart-define=API_URL=http://<votre_ip>:3000/api
+  static const String _defaultApiUrl = String.fromEnvironment('API_URL', defaultValue: '');
+
   static String get _baseUrl {
-    // Android emulator maps 10.0.2.2 → host machine's localhost
-    // Change to your physical device IP if testing on real hardware
+    if (_defaultApiUrl.isNotEmpty) {
+      return _defaultApiUrl;
+    }
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:3000/api'; // Android emulator
-      // return 'http://192.168.100.127:3000/api'; // ← uncomment for physical Android device
     } else if (Platform.isIOS) {
       return 'http://localhost:3000/api'; // iOS Simulator
-      // return 'http://192.168.100.127:3000/api'; // ← uncomment for physical iOS device
     }
-    return 'http://192.168.100.127:3000/api'; // fallback
+    return 'http://localhost:3000/api'; // fallback pour Web/Desktop
   }
 
   static const String _tokenKey = 'auth_token';

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Lifevora AR Avatar</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;touch-action:none;font-family:'Inter',system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%}
+#loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:1000;transition:opacity .8s ease}
+#loading.hidden{opacity:0;pointer-events:none}
+.l-ring{width:52px;height:52px;border-radius:50%;border:1.5px solid #111;border-top-color:#a78bfa;border-right-color:#7c3aed;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.l-txt{margin-top:16px;color:rgba(255,255,255,.35);font-size:10px;letter-spacing:4px;text-transform:uppercase}
+#hud{position:fixed;bottom:0;left:0;right:0;padding:20px 24px;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,transparent 100%);z-index:100;pointer-events:none}
+#btns{display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:all}
+.mbtn{padding:9px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:rgba(255,255,255,.65);font-size:11px;font-weight:500;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;backdrop-filter:blur(16px);transition:all .2s ease;outline:none}
+.mbtn:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateY(-2px)}
+.mbtn.on{border-color:var(--c);background:rgba(var(--cr),var(--cg),var(--cb),.18);color:#fff;box-shadow:0 0 24px rgba(var(--cr),var(--cg),var(--cb),.35)}
+#mood-lbl{position:fixed;top:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.25);font-size:9px;letter-spacing:5px;text-transform:uppercase;z-index:100;transition:all .4s ease}
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:50;transition:opacity .6s ease}
+#tip{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.2);font-size:10px;letter-spacing:2px;text-transform:uppercase;z-index:100;animation:fadeup 3s ease forwards 1s;opacity:0}
+@keyframes fadeup{0%{opacity:0;transform:translateX(-50%) translateY(6px)}20%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0}}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="l-ring"></div><div class="l-txt" id="ltxt">Initializing</div></div>
+<div id="flash"></div>
+<div id="mood-lbl">NEUTRAL</div>
+<div id="tip">Drag to orbit · Scroll to zoom</div>
+<div id="hud">
+  <div id="btns">
+    <button class="mbtn" data-mood="sad"     style="--c:#f59e0b;--cr:245;--cg:158;--cb:11">Melancholy</button>
+    <button class="mbtn on" data-mood="neutral" style="--c:#a78bfa;--cr:167;--cg:139;--cb:250">Neutral</button>
+    <button class="mbtn" data-mood="happy"   style="--c:#34d399;--cr:52;--cg:211;--cb:153">Euphoric</button>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ─── Mood Palette ────────────────────────────────────────────
+const M = {
+  neutral: {
+    bg:  new THREE.Color(0x07040f),
+    p:   new THREE.Color(0xa78bfa),
+    s:   new THREE.Color(0x7c3aed),
+    a:   new THREE.Color(0xddd6fe),
+    pt:  new THREE.Color(0xc4b5fd),
+    lbl: 'NEUTRAL'
+  },
+  happy: {
+    bg:  new THREE.Color(0x021609),
+    p:   new THREE.Color(0x34d399),
+    s:   new THREE.Color(0x059669),
+    a:   new THREE.Color(0xa7f3d0),
+    pt:  new THREE.Color(0x6ee7b7),
+    lbl: 'EUPHORIC'
+  },
+  sad: {
+    bg:  new THREE.Color(0x140f00),
+    p:   new THREE.Color(0xf59e0b),
+    s:   new THREE.Color(0xd97706),
+    a:   new THREE.Color(0xfde68a),
+    pt:  new THREE.Color(0xfbbf24),
+    lbl: 'MELANCHOLY'
+  }
+};
+
+// ─── Globals ─────────────────────────────────────────────────
+let renderer, scene, camera, ctl, clock;
+let root, parts = {};
+let pSys, pVel, pPhase;
+let L = {};
+let cur = 'neutral', tgt = 'neutral', mt = 1;
+
+function ease(t) { return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+function lc(a, b, t) { return new THREE.Color().lerpColors(a, b, t); }
+
+// ─── Init ────────────────────────────────────────────────────
+function init() {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+  clock = new THREE.Clock();
+
+  scene = new THREE.Scene();
+  scene.background = M.neutral.bg.clone();
+  scene.fog = new THREE.FogExp2(0x07040f, .065);
+
+  camera = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, .1, 120);
+  camera.position.set(0, 1.45, 4.6);
+
+  ctl = new OrbitControls(camera, renderer.domElement);
+  ctl.target.set(0, 1.05, 0);
+  ctl.enableDamping = true;
+  ctl.dampingFactor = .055;
+  ctl.minDistance = 1.8;
+  ctl.maxDistance = 10;
+  ctl.minPolarAngle = .25;
+  ctl.maxPolarAngle = 2.0;
+  ctl.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  ctl.update();
+
+  buildLights();
+  buildFloor();
+  buildAvatar();
+  buildParticles();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  document.querySelectorAll('.mbtn').forEach(b =>
+    b.addEventListener('click', () => setMood(b.dataset.mood))
+  );
+
+  setTimeout(() => {
+    const el = document.getElementById('loading');
+    el.classList.add('hidden');
+    setTimeout(() => el.remove(), 900);
+  }, 350);
+}
+
+// ─── Lights ──────────────────────────────────────────────────
+function buildLights() {
+  scene.add(new THREE.AmbientLight(0x1a0f35, .9));
+
+  const key = new THREE.DirectionalLight(0xfff8f0, 1.6);
+  key.position.set(4, 7, 5);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.camera.near = .5;
+  key.shadow.camera.far = 30;
+  key.shadow.camera.left = -5;
+  key.shadow.camera.right = 5;
+  key.shadow.camera.top = 7;
+  key.shadow.camera.bottom = -2;
+  key.shadow.bias = -0.0004;
+  scene.add(key);
+
+  scene.add(Object.assign(new THREE.DirectionalLight(0x3040b0, .5), {
+    position: new THREE.Vector3(-5, 3, -4)
+  }));
+
+  L.aura = new THREE.PointLight(0xa78bfa, 4, 6);
+  L.aura.position.set(0, .06, 0);
+  scene.add(L.aura);
+
+  L.rim = new THREE.SpotLight(0xa78bfa, 3, 12, Math.PI * .2, .4);
+  L.rim.position.set(-2.5, 4, -3);
+  L.rim.target.position.set(0, 1, 0);
+  scene.add(L.rim);
+  scene.add(L.rim.target);
+
+  L.crown = new THREE.PointLight(0xddd6fe, 2, 4);
+  L.crown.position.set(0, 3.2, .2);
+  scene.add(L.crown);
+
+  L.back = new THREE.PointLight(0x7c3aed, 1.5, 5);
+  L.back.position.set(0, 1.5, -2);
+  scene.add(L.back);
+}
+
+// ─── Floor ───────────────────────────────────────────────────
+function buildFloor() {
+  const f = new THREE.Mesh(
+    new THREE.CircleGeometry(4, 128),
+    new THREE.MeshStandardMaterial({ color: 0x0b0818, metalness: .95, roughness: .15, transparent: true, opacity: .9 })
+  );
+  f.rotation.x = -Math.PI / 2;
+  f.receiveShadow = true;
+  scene.add(f);
+
+  for (const [r1, r2, op] of [[2.4, 2.7, .14], [1.6, 1.75, .1], [.8, .95, .18], [.2, .3, .22]]) {
+    const m = new THREE.Mesh(
+      new THREE.RingGeometry(r1, r2, 128),
+      new THREE.MeshBasicMaterial({ color: 0xa78bfa, transparent: true, opacity: op, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = .002;
+    m.userData.ring = true;
+    scene.add(m);
+  }
+
+  const center = new THREE.Mesh(
+    new THREE.CircleGeometry(.18, 64),
+    new THREE.MeshBasicMaterial({ color: 0xa78bfa, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  center.rotation.x = -Math.PI / 2;
+  center.position.y = .003;
+  center.userData.center = true;
+  scene.add(center);
+
+  const grid = new THREE.Mesh(
+    new THREE.PlaneGeometry(12, 12, 24, 24),
+    new THREE.MeshBasicMaterial({ color: 0x3b1d6e, wireframe: true, transparent: true, opacity: .05 })
+  );
+  grid.rotation.x = -Math.PI / 2;
+  grid.position.y = -.001;
+  grid.userData.grid = true;
+  scene.add(grid);
+}
+
+// ─── Materials helper ─────────────────────────────────────────
+function mat(color, rough, metal, emissive = 0x000000, emissI = 0) {
+  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, emissive, emissiveIntensity: emissI });
+}
+
+// ─── Avatar ───────────────────────────────────────────────────
+function buildAvatar() {
+  root = new THREE.Group();
+
+  const SKIN   = mat(0xf4c49a, .55, 0);
+  const DARK   = mat(0x0d0520, .25, .75);
+  const CHROME = mat(0x9090a8, .05, 1.0);
+  const CHROME2= mat(0x707080, .08, .95);
+  const EYE    = mat(0x000000, .05, 0, 0xa78bfa, 3.5);
+  const GLOW   = mat(0x0a0418, .15, .6, 0xa78bfa, .25);
+  const VISOR  = new THREE.MeshStandardMaterial({ color: 0x6d28d9, roughness: .04, metalness: 1, transparent: true, opacity: .55 });
+  const SOLE   = mat(0x181830, .05, .98);
+
+  function add(geo, m, x, y, z, rx = 0, ry = 0, rz = 0, name = '') {
+    const mesh = new THREE.Mesh(geo, m);
+    mesh.position.set(x, y, z);
+    mesh.rotation.set(rx, ry, rz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    if (name) { mesh.name = name; parts[name] = mesh; }
+    root.add(mesh);
+    return mesh;
+  }
+
+  // HEAD
+  add(new THREE.SphereGeometry(.148, 48, 36), SKIN, 0, 1.665, 0, 0, 0, 0, 'head');
+  parts.head.scale.y = 1.08;
+
+  add(new THREE.SphereGeometry(.158, 48, 18, 0, Math.PI*2, 0, Math.PI*.58), mat(0x0e0808, .9, 0), 0, 1.685, -.008, 0, 0, 0, 'hair');
+  add(new THREE.BoxGeometry(.06, .008, .12), mat(0x1a1010, .9, 0), 0, 1.838, -.04, -.15, 0, 0);
+
+  // Ear studs
+  add(new THREE.SphereGeometry(.012, 12, 8), CHROME2, -.148, 1.65, .02);
+  add(new THREE.SphereGeometry(.012, 12, 8), CHROME2,  .148, 1.65, .02);
+
+  // Eye sockets
+  add(new THREE.SphereGeometry(.035, 16, 10), mat(0xd4a880, .6, 0), -.052, 1.67, .12);
+  add(new THREE.SphereGeometry(.035, 16, 10), mat(0xd4a880, .6, 0),  .052, 1.67, .12);
+
+  // Eyes
+  add(new THREE.SphereGeometry(.02, 20, 14), EYE,        -.052, 1.67, .131, 0, 0, 0, 'eyeL');
+  add(new THREE.SphereGeometry(.02, 20, 14), EYE.clone(), .052, 1.67, .131, 0, 0, 0, 'eyeR');
+
+  // Nose + lips
+  add(new THREE.SphereGeometry(.022, 12, 8), mat(0xe8b88a, .6, 0), 0, 1.62, .138);
+  add(new THREE.CylinderGeometry(.028, .025, .018, 16), mat(0xc4785a, .5, 0), 0, 1.575, .13, Math.PI/2, 0, 0, 'mouth');
+
+  // Visor
+  const vm = new THREE.Mesh(
+    new THREE.SphereGeometry(.155, 48, 24, Math.PI*.25, Math.PI*1.5, Math.PI*.18, Math.PI*.58),
+    VISOR
+  );
+  vm.position.set(0, 1.665, .002);
+  vm.castShadow = false;
+  root.add(vm);
+  parts.visor = vm;
+
+  // NECK
+  add(new THREE.CylinderGeometry(.052, .06, .1, 20), SKIN, 0, 1.53, 0);
+  add(new THREE.CylinderGeometry(.064, .062, .03, 20), CHROME2, 0, 1.49, 0);
+
+  // TORSO
+  add(new THREE.CylinderGeometry(.155, .135, .42, 24), DARK, 0, 1.29, 0, 0, 0, 0, 'torso');
+  add(new THREE.BoxGeometry(.19, .28, .04), mat(0x160d30, .2, .85), 0, 1.31, .12, 0, 0, 0, 'chest');
+
+  // Energy core
+  add(new THREE.CylinderGeometry(.022, .022, .008, 24), GLOW, 0, 1.36, .158);
+  add(new THREE.CylinderGeometry(.014, .014, .015, 24), mat(0x000000, 0, 0, 0xa78bfa, 6), 0, 1.36, .165, 0, 0, 0, 'core');
+
+  // Chest detail lines
+  add(new THREE.BoxGeometry(.005, .18, .025), GLOW,  .065, 1.3, .148);
+  add(new THREE.BoxGeometry(.005, .18, .025), GLOW, -.065, 1.3, .148);
+
+  // Shoulder pads
+  for (const s of [-1, 1]) {
+    add(new THREE.CylinderGeometry(.07, .065, .055, 20), CHROME, s*.21, 1.49, 0);
+    add(new THREE.SphereGeometry(.055, 20, 12, 0, Math.PI*2, 0, Math.PI*.5), CHROME2, s*.21, 1.52, 0);
+    add(new THREE.CylinderGeometry(.028, .025, .06, 16), GLOW, s*.21, 1.44, 0, 0, 0, 0, 'shoulderGlow' + s);
+  }
+
+  add(new THREE.CylinderGeometry(.065, .07, .025, 24), DARK, 0, 1.48, 0);
+
+  // ARMS
+  for (const [sx, name] of [[-1, 'armL'], [1, 'armR']]) {
+    add(new THREE.CylinderGeometry(.042, .036, .3, 16), DARK, sx*.225, 1.27, 0, 0, 0, sx*-.14, name);
+    add(new THREE.SphereGeometry(.042, 16, 10), CHROME2, sx*.255, 1.1, 0);
+    add(new THREE.CylinderGeometry(.038, .032, .26, 16), DARK, sx*.27, 0.96, 0, 0, 0, sx*-.12, 'fore' + name);
+    add(new THREE.CylinderGeometry(.04, .04, .04, 16), CHROME, sx*.28, .84, 0, 0, 0, sx*-.12);
+    add(new THREE.CylinderGeometry(.033, .033, .015, 16), GLOW, sx*.28, .84, 0, 0, 0, sx*-.12);
+    add(new THREE.SphereGeometry(.038, 16, 12), CHROME2, sx*.285, .77, 0, 0, 0, 0, 'wrist' + name);
+    add(new THREE.SphereGeometry(.045, 20, 14), SKIN, sx*.29, .68, 0, 0, 0, 0, 'hand' + name);
+    for (let fi = 0; fi < 4; fi++) {
+      const fo = (fi - 1.5) * .025;
+      add(new THREE.CylinderGeometry(.009, .007, .05, 8), SKIN, sx*.29 + fo, .635, -.02, Math.PI*.15, 0, 0);
+      add(new THREE.CylinderGeometry(.008, .006, .04, 8), SKIN, sx*.29 + fo, .59, .01, Math.PI*.12, 0, 0);
+    }
+    add(new THREE.CylinderGeometry(.011, .009, .045, 8), SKIN, sx*.26, .67, .025, 0, 0, sx*.5);
+  }
+
+  // HIPS / BELT
+  add(new THREE.CylinderGeometry(.135, .125, .12, 24), DARK, 0, 1.05, 0);
+  add(new THREE.CylinderGeometry(.128, .125, .018, 24), CHROME2, 0, 1.0, 0);
+  add(new THREE.BoxGeometry(.055, .04, .04), GLOW, 0, 1.0, .128);
+
+  // LEGS
+  for (const [sx, name] of [[-1, 'legL'], [1, 'legR']]) {
+    add(new THREE.CylinderGeometry(.062, .052, .38, 16), DARK, sx*.075, .8, 0, 0, 0, 0, 'thigh' + name);
+    add(new THREE.SphereGeometry(.058, 16, 10), CHROME2, sx*.075, .62, 0);
+    add(new THREE.CylinderGeometry(.05, .048, .025, 16), GLOW, sx*.075, .62, .04);
+    add(new THREE.CylinderGeometry(.052, .044, .36, 16), DARK, sx*.072, .44, 0, 0, 0, 0, 'shin' + name);
+    add(new THREE.BoxGeometry(.06, .2, .025), mat(0x130d28, .2, .85), sx*.072, .44, .048);
+    add(new THREE.SphereGeometry(.048, 16, 10), CHROME2, sx*.072, .26, 0);
+    add(new THREE.CylinderGeometry(.056, .054, .18, 16), mat(0x0a0818, .2, .8), sx*.072, .17, 0, 0, 0, 0, 'boot' + name);
+    add(new THREE.BoxGeometry(.1, .06, .16), mat(0x0c0a1e, .2, .8), sx*.072, .07, .03, 0, 0, 0, 'toe' + name);
+    add(new THREE.BoxGeometry(.104, .018, .165), SOLE, sx*.072, .04, .03);
+    add(new THREE.BoxGeometry(.1, .015, .165), CHROME2, sx*.072, .05, .03);
+    add(new THREE.BoxGeometry(.085, .008, .14), GLOW, sx*.072, .048, .03, 0, 0, 0, 'bootglow' + name);
+  }
+
+  root.userData = { eye: EYE, eyeR: parts.eyeR.material, visor: VISOR, glow: GLOW };
+  scene.add(root);
+}
+
+// ─── Particles ───────────────────────────────────────────────
+function buildParticles() {
+  const N = 280;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(N * 3);
+  pVel   = new Float32Array(N * 3);
+  pPhase = new Float32Array(N);
+
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = .5 + Math.random() * 3;
+    pos[i*3]     = Math.cos(a) * r;
+    pos[i*3 + 1] = Math.random() * 5;
+    pos[i*3 + 2] = Math.sin(a) * r;
+    pVel[i*3]     = (Math.random() - .5) * .003;
+    pVel[i*3 + 1] = .005 + Math.random() * .012;
+    pVel[i*3 + 2] = (Math.random() - .5) * .003;
+    pPhase[i] = Math.random() * Math.PI * 2;
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  pSys = new THREE.Points(geo, new THREE.PointsMaterial({
+    color: 0xc4b5fd, size: .02, transparent: true, opacity: .6,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+  }));
+  scene.add(pSys);
+}
+
+// ─── Mood ────────────────────────────────────────────────────
+function setMood(m) {
+  if (m === tgt && mt >= 1) return;
+  tgt = m; mt = 0;
+  document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', b.dataset.mood === m));
+  const lbl = document.getElementById('mood-lbl');
+  lbl.style.opacity = '0';
+  setTimeout(() => { lbl.textContent = M[m].lbl; lbl.style.opacity = '1'; }, 300);
+  const f = document.getElementById('flash');
+  f.style.background = `radial-gradient(circle at 50% 35%, #${M[m].p.getHexString()}1a 0%, transparent 60%)`;
+  f.style.opacity = '1';
+  setTimeout(() => f.style.opacity = '0', 700);
+  cur = m;
+}
+
+function updateMood(dt) {
+  if (mt >= 1) return;
+  mt = Math.min(1, mt + dt / .9);
+  const t = ease(mt);
+  const F = M[cur], T = M[tgt];
+
+  scene.background.lerpColors(F.bg, T.bg, t);
+  if (scene.fog) scene.fog.color.lerpColors(F.bg, T.bg, t);
+  L.aura.color.lerpColors(F.p, T.p, t);
+  L.rim.color.lerpColors(F.p, T.p, t);
+  L.crown.color.lerpColors(F.a, T.a, t);
+  L.back.color.lerpColors(F.s, T.s, t);
+  if (pSys) pSys.material.color.lerpColors(F.pt, T.pt, t);
+
+  const ep = lc(F.p, T.p, t);
+  root.userData.eye.emissive.copy(ep);
+  if (root.userData.eyeR) root.userData.eyeR.emissive.copy(ep);
+  root.userData.glow.emissive.copy(ep);
+  root.userData.visor.color.lerpColors(F.s, T.s, t);
+
+  scene.children.forEach(c => {
+    if (c.userData.ring || c.userData.center) c.material.color.lerpColors(F.p, T.p, t);
+    if (c.userData.grid) c.material.color.lerpColors(F.s, T.s, t);
+  });
+
+  ['L','R'].forEach(s => { const b = parts['bootglow'+s]; if(b) b.material.emissive.lerpColors(F.p, T.p, t); });
+  [-1,1].forEach(s => { const g = parts['shoulderGlow'+s]; if(g) g.material.emissive.lerpColors(F.p, T.p, t); });
+}
+
+// ─── Avatar Animation ─────────────────────────────────────────
+function animAvatar(t) {
+  if (!root) return;
+  const m = tgt;
+  const breathe = Math.sin(t * 1.15 * Math.PI) * .008;
+  const sway = Math.sin(t * .3) * .022;
+  const { head, mouth, armL, armR, forearmL, forearmR, legL, legR, core } = parts;
+
+  if (m === 'happy') {
+    root.position.y = breathe + Math.abs(Math.sin(t * 3.8)) * .045;
+    root.rotation.y = sway * 2.2;
+    if (armL) { armL.rotation.z = 1.2 + Math.sin(t*5)*.28; armL.rotation.x = Math.sin(t*2.5)*.12; }
+    if (armR) { armR.rotation.z = -1.2 - Math.sin(t*5+1)*.28; armR.rotation.x = Math.sin(t*2.5+.8)*.12; }
+    if (forearmL) forearmL.rotation.x = -.15 + Math.sin(t*5)*.15;
+    if (forearmR) forearmR.rotation.x = -.15 + Math.sin(t*5+1)*.15;
+    if (head) { head.rotation.y = Math.sin(t*2.2)*.18; head.rotation.x = -.04 + Math.sin(t*3.5)*.06; }
+    if (mouth) mouth.scale.set(1.4, .7, 1.2);
+    if (legL) legL.rotation.x = Math.sin(t*3.8)*.08;
+    if (legR) legR.rotation.x = Math.sin(t*3.8+Math.PI)*.08;
+    if (core) core.material.emissiveIntensity = 5 + Math.sin(t*10)*2;
+    root.userData.eye.emissiveIntensity = 4 + Math.sin(t*9)*1;
+  } else if (m === 'sad') {
+    root.position.y = breathe - .028;
+    root.rotation.y = sway * .35;
+    if (armL) { armL.rotation.z = .06 + Math.sin(t*.7)*.04; armL.rotation.x = .1; }
+    if (armR) { armR.rotation.z = -.06 - Math.sin(t*.7)*.04; armR.rotation.x = .1; }
+    if (forearmL) forearmL.rotation.x = .15;
+    if (forearmR) forearmR.rotation.x = .15;
+    if (head) { head.rotation.x = .25; head.rotation.y = Math.sin(t*.55)*.06; }
+    if (mouth) mouth.scale.set(.7, .5, .8);
+    if (legL) legL.rotation.x = 0;
+    if (legR) legR.rotation.x = 0;
+    if (core) core.material.emissiveIntensity = .8 + Math.sin(t*1.5)*.3;
+    root.userData.eye.emissiveIntensity = 1.2;
+  } else {
+    root.position.y = breathe;
+    root.rotation.y = sway;
+    if (armL) { armL.rotation.z = .14 + Math.sin(t*1.4)*.07; armL.rotation.x = Math.sin(t*.9)*.04; }
+    if (armR) { armR.rotation.z = -.14 - Math.sin(t*1.4+.5)*.07; armR.rotation.x = Math.sin(t*.9+.5)*.04; }
+    if (forearmL) forearmL.rotation.x = -.05 + Math.sin(t*1.2)*.05;
+    if (forearmR) forearmR.rotation.x = -.05 + Math.sin(t*1.2+.5)*.05;
+    if (head) { head.rotation.x = 0; head.rotation.y = Math.sin(t*.65)*.09; }
+    if (mouth) mouth.scale.set(1, .6, 1);
+    if (legL) legL.rotation.x = Math.sin(t*1.4)*.025;
+    if (legR) legR.rotation.x = Math.sin(t*1.4+Math.PI)*.025;
+    if (core) core.material.emissiveIntensity = 3 + Math.sin(t*2.5)*.8;
+    root.userData.eye.emissiveIntensity = 3.5 + Math.sin(t*4)*.5;
+  }
+}
+
+// ─── Particles Animation ──────────────────────────────────────
+function animParticles(t) {
+  if (!pSys) return;
+  const pos = pSys.geometry.attributes.position.array;
+  const N = pos.length / 3;
+  const m = tgt;
+  const sp = m === 'happy' ? 2.2 : m === 'sad' ? .35 : 1;
+  const spread = m === 'happy' ? 3 : m === 'sad' ? 1.8 : 2.5;
+
+  for (let i = 0; i < N; i++) {
+    const i3 = i * 3;
+    pos[i3]     += pVel[i3]     * sp + Math.sin(t*.4 + pPhase[i]) * .0005;
+    pos[i3 + 1] += pVel[i3 + 1] * sp;
+    pos[i3 + 2] += pVel[i3 + 2] * sp;
+    if (pos[i3 + 1] > 5 || Math.hypot(pos[i3], pos[i3 + 2]) > spread + 1.5) {
+      const a = Math.random() * Math.PI * 2, r = .3 + Math.random() * spread;
+      pos[i3] = Math.cos(a) * r; pos[i3 + 1] = -.4; pos[i3 + 2] = Math.sin(a) * r;
+    }
+  }
+  pSys.geometry.attributes.position.needsUpdate = true;
+  pSys.rotation.y = t * .035;
+  pSys.material.opacity = m === 'happy' ? .85 : m === 'sad' ? .2 : .55;
+  pSys.material.size    = m === 'happy' ? .026 : m === 'sad' ? .014 : .02;
+}
+
+// ─── Rings Animation ─────────────────────────────────────────
+function animRings(t) {
+  const m = tgt;
+  const pulse = m === 'happy' ? 4 : m === 'sad' ? .7 : 1.5;
+  L.aura.intensity  = (m === 'happy' ? 5.5 : m === 'sad' ? 1.2 : 3.5) + Math.sin(t * pulse) * .9;
+  L.crown.intensity = (m === 'happy' ? 3   : m === 'sad' ? .5  : 2)   + Math.sin(t * pulse * .8) * .5;
+
+  let ri = 0;
+  scene.children.forEach(c => {
+    if (c.userData.ring) {
+      c.material.opacity = ([.14, .1, .18, .22][ri] || .12) + Math.sin(t * pulse + ri * 1.3) * .05;
+      c.rotation.z = t * (ri % 2 === 0 ? .07 : -.045);
+      ri++;
+    }
+    if (c.userData.center) {
+      c.material.opacity = .12 + Math.sin(t * pulse * 1.8) * .08;
+    }
+  });
+}
+
+// ─── Render Loop ─────────────────────────────────────────────
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = clock.getDelta();
+  const t  = clock.getElapsedTime();
+  ctl.update();
+  updateMood(dt);
+  animAvatar(t);
+  animParticles(t);
+  animRings(t);
+  renderer.render(scene, camera);
+}
+
+// ─── Flutter / External API ───────────────────────────────────
+window.setMood = setMood;
+window.setProgress = p => setMood(p >= 75 ? 'happy' : p >= 35 ? 'neutral' : 'sad');
+
+init();
+loop();
+</script>
+</body>
+</html>

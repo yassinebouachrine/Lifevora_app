@@ -8,7 +8,7 @@ import '../../widgets/bottom_nav_bar.dart';
 import '../history/history_screen.dart';
 import '../add_activity/add_activity_screen.dart';
 import '../profile/profile_screen.dart';
-import '../metaverse/avatar_screen.dart';
+import '../metaverse/ar_avatar/avatar_ar_screen.dart';
 import '../food_scanner/food_scanner_screen.dart';
 import '../smart_coach/coach_screen.dart';
 import '../auth/login_screen.dart';
@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
           isGuest ? _guestScreen() : const CoachScreen(),        // 2
           const SizedBox(),                                       // 3 FAB
           isGuest ? _guestScreen() : const FoodScannerScreen(),  // 4
-          isGuest ? _guestScreen() : const AvatarScreen(),       // 5
+          isGuest ? _guestScreen() : const AvatarArScreen(),     // 5
           isGuest ? _guestScreen() : const ProfileScreen(),      // 6
         ],
       ),
