@@ -1,82 +1,24 @@
 # ==========================================
-# ENVIRONMENT & SECRETS
+# FIXES (IMPORTANT)
 # ==========================================
-**/.env
-**/.env.local
-**/.env.*.local
-**/secrets.*
 
-# ==========================================
-# NODE.JS / BACKEND
-# ==========================================
-**/node_modules/
-**/npm-debug.log*
-**/yarn-debug.log*
-**/yarn-error.log*
-**/.npm
-**/package-lock.json
-
-# ==========================================
-# FLUTTER / DART
-# ==========================================
-**/.dart_tool/
+# Flutter build (redundant safety)
+build/
 **/build/
-**/.flutter-plugins
-**/.flutter-plugins-dependencies
-**/.metadata
-**/pubspec.lock
-**/coverage/
-**/*.g.dart
-**/*.freezed.dart
 
-# ==========================================
-# ANDROID
-# ==========================================
-**/android/.gradle/
-**/android/app/debug/
-**/android/app/profile/
-**/android/app/release/
-**/android/local.properties
-**/android/key.properties
-**/*.keystore
-**/*.jks
+# Android intermediates (VERY IMPORTANT)
+**/android/app/build/
+**/android/build/
+**/android/.cxx/
 
-# ==========================================
-# IOS / MACOS
-# ==========================================
-**/ios/Pods/
-**/ios/.symlinks/
-**/macos/Pods/
-**/*.xcworkspace/xcuserdata/
-**/DerivedData/
+# Gradle cache
+.gradle/
 
-# ==========================================
-# IDEs & EDITORS
-# ==========================================
-.idea/
-.vscode/
-**/*.iml
-**/*.suo
-**/*.user
-**/*.userosscache
-**/*.sln.docstates
+# Long path / transform folders causing errors
+**/.transforms/
+**/intermediates/
 
-# ==========================================
-# OS FILES
-# ==========================================
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-desktop.ini
-
-# ==========================================
-# LOGS & TEMP
-# ==========================================
-**/logs/
-**/*.log
-**/tmp/
-**/temp/
+# APK / outputs
+**/outputs/
+*.apk
+*.aab
