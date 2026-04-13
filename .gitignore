@@ -1,12 +1,14 @@
-# ==========================================
-# FIXES (IMPORTANT)
-# ==========================================
 
-# Flutter build (redundant safety)
+# Flutter build 
 build/
 **/build/
 
-# Android intermediates (VERY IMPORTANT)
+node_modules/
+.dart_tool/
+.idea/
+
+
+# Android intermediates
 **/android/app/build/
 **/android/build/
 **/android/.cxx/
