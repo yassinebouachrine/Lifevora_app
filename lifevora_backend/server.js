@@ -51,22 +51,38 @@ app.use('/api/stats', statsRoutes);
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
 
-// Démarrage
+const os = require('os');
+
+// Fonction pour récupérer l'IP locale réelle
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal && iface.address.startsWith('192.168.')) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
+}
+
 const startServer = async () => {
-    await initDatabase();   // create DB + tables if they don't exist
-    await testConnection(); // verify pool connection
+    await initDatabase();
+    await testConnection();
+    
+    const localIp = getLocalIp();  // ← Va trouver 192.168.11.102 automatiquement
+    
     app.listen(PORT, '0.0.0.0', () => {
         console.log('');
         console.log('🚀 ================================');
         console.log(`🏃  Lifevora Backend démarré!`);
         console.log(`📡  Port     : ${PORT}`);
-        console.log(`🌍  Local    : http://192.168.100.11:${PORT}`);
-        console.log(`📱  Emulator : http://10.0.2.2:${PORT}`);
+        console.log(`🌍  Local    : http://${localIp}:${PORT}`);
+        console.log(`📱  Téléphone : http://192.168.11.111:${PORT}`);
         console.log('🚀 ================================');
         console.log('');
     });
 };
-
 startServer();
 
 module.exports = app;
