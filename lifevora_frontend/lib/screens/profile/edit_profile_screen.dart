@@ -169,8 +169,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           Stack(
             children: [
               Container(
-                width: 100,
-                height: 100,
+                width: 180,
+                height: 180,
                 decoration: const BoxDecoration(
                   gradient: AppColors.primaryGradient,
                   shape: BoxShape.circle,
@@ -181,7 +181,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ? user!.name[0].toUpperCase()
                         : '?',
                     style: const TextStyle(
-                      fontSize: 42,
+                      fontSize: 52,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),

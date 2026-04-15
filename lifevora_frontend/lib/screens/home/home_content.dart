@@ -32,9 +32,12 @@ class _HomeContentState extends State<HomeContent> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // ✅ Charger les données au premier affichage
+    // Deferred to avoid calling notifyListeners() during build
     if (!_initialized) {
       _initialized = true;
-      _loadData();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadData();
+      });
     }
   }
 
