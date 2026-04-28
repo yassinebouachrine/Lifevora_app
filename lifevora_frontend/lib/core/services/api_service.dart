@@ -12,13 +12,13 @@ class ApiService {
     // Android emulator maps 10.0.2.2 → host machine's localhost
     // Change to your physical device IP if testing on real hardware
     if (Platform.isAndroid) {
-      return 'http://10.0.2.2:3000/api'; // Android emulator
+      return 'http://192.168.3.51:3000/api'; // Android emulator
       // return 'http://192.168.100.127:3000/api'; // ← uncomment for physical Android device
     } else if (Platform.isIOS) {
-      return 'http://localhost:3000/api'; // iOS Simulator
+      return 'http://192.168.3.51:3000/api'; // iOS Simulator
       // return 'http://192.168.100.127:3000/api'; // ← uncomment for physical iOS device
     }
-    return 'http://192.168.100.127:3000/api'; // fallback
+    return 'http://192.168.3.51:3000/api'; // fallback
   }
 
   static const String _tokenKey = 'auth_token';

@@ -1,30 +1,46 @@
 import 'package:flutter/foundation.dart';
 import '../models/coach_session_model.dart';
+import '../core/services/coach_service.dart';
 
 class CoachProvider extends ChangeNotifier {
-  final List<CoachMessage> _messages = []; // final fix
+  final List<CoachMessage> _messages = [];
   bool _isTyping = false;
+  bool _hasError = false;
+  String _errorMessage = '';
 
+  final CoachService _coachService = CoachService();
+
+  // ─── Getters ───────────────────────────────────────────────
   List<CoachMessage> get messages => _messages;
   bool get isTyping => _isTyping;
+  bool get hasError => _hasError;
+  String get errorMessage => _errorMessage;
 
+  // ─── Initialisation ────────────────────────────────────────
   void initConversation() {
     if (_messages.isEmpty) {
-      _messages.add(CoachMessage(
-        id: '0',
-        content:
-            'Bonjour! 👋 Je suis ton coach IA Lifevora. Comment puis-je t\'aider aujourd\'hui? Je peux t\'aider avec tes entraînements, nutrition, ou te motiver!',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-      notifyListeners();
+      _addBotMessage(
+        'Bonjour! 👋 Je suis ton coach IA Lifevora propulsé par Gemini. '
+        'Comment puis-je t\'aider aujourd\'hui?\n\n'
+        'Je peux t\'aider avec :\n'
+        '🏋️ Entraînements et exercices\n'
+        '🥗 Nutrition et alimentation\n'
+        '😴 Récupération et sommeil\n'
+        '💪 Motivation et objectifs',
+      );
     }
   }
 
+  // ─── Envoyer un message ────────────────────────────────────
   Future<void> sendMessage(String content) async {
+    if (content.trim().isEmpty) return;
+
+    _hasError = false;
+    _errorMessage = '';
+
     final userMsg = CoachMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      content: content,
+      content: content.trim(),
       isUser: true,
       timestamp: DateTime.now(),
     );
@@ -32,41 +48,75 @@ class CoachProvider extends ChangeNotifier {
     _isTyping = true;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    try {
+      // ─── FIX : exclure le message de bienvenue (index 0, isUser=false) ───
+      // et le message actuel (dernier élément)
+      final history = _messages
+          .sublist(0, _messages.length - 1) // Exclure message actuel
+          .where((msg) => msg.isUser || _messages.indexOf(msg) > 0) // Exclure bienvenue
+          .toList();
 
-    final response = _generateAIResponse(content);
+      // Plus simple : filtrer uniquement les vrais échanges
+      // (ignorer le 1er message bot de bienvenue)
+      final filteredHistory = _messages
+          .sublist(0, _messages.length - 1)
+          .skip(1) // ← Skip le message de bienvenue du bot (index 0)
+          .toList();
+
+      final aiResponse = await _coachService.sendMessage(
+        message: content.trim(),
+        conversationHistory: filteredHistory,
+      );
+
+      _addBotMessage(aiResponse);
+    } catch (e) {
+      _hasError = true;
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _addBotMessage(
+        '😔 Oups! Je rencontre un problème technique.\n'
+        '$_errorMessage\n\n'
+        'Réessaie dans quelques secondes!',
+      );
+    } finally {
+      _isTyping = false;
+      notifyListeners();
+    }
+  }
+
+  // ─── Réessayer le dernier message ─────────────────────────
+  Future<void> retryLastMessage() async {
+    // Trouver le dernier message utilisateur
+    final lastUserMsg = _messages.lastWhere(
+      (m) => m.isUser,
+      orElse: () => throw Exception('Aucun message à réessayer'),
+    );
+
+    // Supprimer le message d'erreur du bot si présent
+    if (_messages.last.isUser == false) {
+      _messages.removeLast();
+    }
+
+    // Réessayer
+    await sendMessage(lastUserMsg.content);
+  }
+
+  // ─── Effacer la conversation ───────────────────────────────
+  void clearConversation() {
+    _messages.clear();
+    _hasError = false;
+    _errorMessage = '';
+    initConversation();
+  }
+
+  // ─── Helpers privés ────────────────────────────────────────
+  void _addBotMessage(String content, {bool isError = false}) {
     final aiMsg = CoachMessage(
-      id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-      content: response,
+      id: '${DateTime.now().millisecondsSinceEpoch}_bot',
+      content: content,
       isUser: false,
       timestamp: DateTime.now(),
     );
     _messages.add(aiMsg);
-    _isTyping = false;
     notifyListeners();
-  }
-
-  String _generateAIResponse(String userMessage) {
-    final msg = userMessage.toLowerCase();
-
-    if (msg.contains('course') || msg.contains('courir')) {
-      return '🏃 Super! La course est excellente pour le cardio. Je recommande de commencer par 20-30 min à rythme modéré. N\'oublie pas l\'échauffement et le retour au calme!';
-    } else if (msg.contains('yoga')) {
-      return '🧘 Le yoga est fantastique pour la flexibilité et la récupération! Commence par 15-20 min de yoga doux le matin.';
-    } else if (msg.contains('nutrition') ||
-        msg.contains('manger') ||
-        msg.contains('aliment')) {
-      return '🥗 Une bonne nutrition est essentielle! Essaie de: 1) Manger 5 portions de légumes/jour 2) Boire 2L d\'eau 3) Privilégier les protéines maigres.';
-    } else if (msg.contains('fatigue') || msg.contains('fatigué')) {
-      return '😴 La récupération est aussi importante que l\'entraînement! Assure-toi d\'avoir 7-8h de sommeil.';
-    } else if (msg.contains('objectif') || msg.contains('but')) {
-      return '🎯 Excellent état d\'esprit! Pour atteindre tes objectifs: 1) Sois régulier(e) 2) Augmente progressivement l\'intensité 3) Célèbre les petites victoires!';
-    } else if (msg.contains('motivation')) {
-      return '💪 La motivation vient de l\'action, pas le contraire! Commence petit: même 10 min par jour fait une différence.';
-    } else if (msg.contains('musculation') || msg.contains('muscle')) {
-      return '💪 La musculation booste le métabolisme et renforce les os! Pour débuter: 3 séances/semaine, repos entre les groupes musculaires.';
-    } else {
-      return '🌟 Merci pour ta question! Je suis là pour t\'accompagner dans ton parcours fitness. Tu peux me demander des conseils sur l\'entraînement, la nutrition, la récupération, ou la motivation.';
-    }
   }
 }
